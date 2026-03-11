@@ -136,7 +136,7 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
 def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, Fried_parameter):
     
     var_fitting = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter/Fried_parameter) ** (5/3)
-    
+    print("Fitting:", var_fitting)
     return var_fitting
 
 
@@ -263,7 +263,8 @@ def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_num
     PSD_input = PSD_atmo_turb + PSD_vib
 
     variance_temp, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, omega_temp_freq_interval)
-   
+    print("Temporal:", variance_temp)  
+    
     return variance_temp, PSD_output, PSD_input 
 
 
@@ -532,6 +533,7 @@ def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval,
     
     variance_alias, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct,
                                                                   PSD_input, omega_temp_freq_interval)
+    print("Aliasing:", variance_alias)  
     
     return variance_alias, PSD_output, PSD_input 
     
@@ -627,7 +629,7 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     variance_meas, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                  PSD_input, omega_temp_freq_interval)
-    
+    print("Measure:", variance_meas)  
     return variance_meas, PSD_output, PSD_input 
     
 
@@ -645,76 +647,76 @@ def build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_numbe
     return transfer_function
 
 
-# Computes the variance of a given type ('fitting', 'temp', 'alias', or 'meas') for the system.
+# # Computes the variance of a given type ('fitting', 'temp', 'alias', or 'meas') for the system.
 
-def variance(omega_temp_freq_interval, t_0, gain, num1, num2, num3, den1, den2, den3, 
-             variance_type, actuators_number, telescope_diameter, Fried_parameter, F_excess, 
-             sky_bkg, dark_curr, read_out_noise, photon_flux, frame_rate, magnitudo, 
-             n_subaperture, collecting_area, pixel_pos, fitting_coeff, alpha, seeing, 
-             modulation_radius, windspeed, maximum_radial_order_corrected, transfer_function_type,
-             file_optg, PSD_tur=None, PSD_vib=None, file_path_matrix_R=None, system="ANDES"):
+# def variance(omega_temp_freq_interval, t_0, gain, num1, num2, num3, den1, den2, den3, 
+#              variance_type, actuators_number, telescope_diameter, Fried_parameter, F_excess, 
+#              sky_bkg, dark_curr, read_out_noise, photon_flux, frame_rate, magnitudo, 
+#              n_subaperture, collecting_area, pixel_pos, fitting_coeff, alpha, seeing, 
+#              modulation_radius, windspeed, maximum_radial_order_corrected, transfer_function_type,
+#              file_optg, PSD_tur=None, PSD_vib=None, file_path_matrix_R=None, system="ANDES"):
     
    
-    valid_types = ("fitting", "temp", "alias", "meas")
+#     valid_types = ("fitting", "temp", "alias", "meas")
     
-    # optical gains are needed for both aliasing and measurement variance,
-    # so we compute them at the beginning
-    if system == "ANDES":
-        c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius)
-    # TODO not supported yet
-    #elif system == "SOUL":
-    #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
+#     # optical gains are needed for both aliasing and measurement variance,
+#     # so we compute them at the beginning
+#     if system == "ANDES":
+#         c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius)
+#     # TODO not supported yet
+#     #elif system == "SOUL":
+#     #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
     
-    if variance_type not in valid_types: 
-        raise ValueError("Variance_type must be one of: 'fitting', 'temp', 'alias', or 'meas'")
+#     if variance_type not in valid_types: 
+#         raise ValueError("Variance_type must be one of: 'fitting', 'temp', 'alias', or 'meas'")
        
        
-    if variance_type == "fitting" and PSD_tur is None and PSD_vib is None:
+#     if variance_type == "fitting" and PSD_tur is None and PSD_vib is None:
             
-        sigma2_fit = fitting_variance(fitting_coeff, actuators_number, telescope_diameter, Fried_parameter) 
+#         sigma2_fit = fitting_variance(fitting_coeff, actuators_number, telescope_diameter, Fried_parameter) 
        
-        print("Fitting:", sigma2_fit)   
-        return sigma2_fit
+#         print("Fitting:", sigma2_fit)   
+#         return sigma2_fit
    
     
-    if variance_type == "temp" and PSD_tur is not None and PSD_vib is not None:
+#     if variance_type == "temp" and PSD_tur is not None and PSD_vib is not None:
     
-        H = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
-                                    den2, den3, transfer_function_type)
+#         H = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
+#                                     den2, den3, transfer_function_type)
     
-        sigma2_temp, PSD_out, PSD_in = temporal_variance (PSD_tur, PSD_vib, H, actuators_number, omega_temp_freq_interval)
+#         sigma2_temp, PSD_out, PSD_in = temporal_variance (PSD_tur, PSD_vib, H, actuators_number, omega_temp_freq_interval)
          
-        print("Temporal:", sigma2_temp)       
-        return sigma2_temp, PSD_out, PSD_in, H
+#         print("Temporal:", sigma2_temp)       
+#         return sigma2_temp, PSD_out, PSD_in, H
    
     
-    if variance_type == "alias" and PSD_tur is None and PSD_vib is None and file_path_matrix_R is not None:
+#     if variance_type == "alias" and PSD_tur is None and PSD_vib is None and file_path_matrix_R is not None:
         
-        H = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
-                                    den2, den3,  transfer_function_type)
+#         H = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
+#                                     den2, den3,  transfer_function_type)
  
-        sigma2_alias, PSD_out, PSD_in = aliasing_variance(H, actuators_number, omega_temp_freq_interval, 
-                               alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                               maximum_radial_order_corrected, file_path_matrix_R, c_optg)
+#         sigma2_alias, PSD_out, PSD_in = aliasing_variance(H, actuators_number, omega_temp_freq_interval, 
+#                                alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
+#                                maximum_radial_order_corrected, file_path_matrix_R, c_optg)
        
-        print("Aliasing:", sigma2_alias)       
-        return sigma2_alias, PSD_out, PSD_in, H
+#         print("Aliasing:", sigma2_alias)       
+#         return sigma2_alias, PSD_out, PSD_in, H
    
     
    
-    if variance_type == "meas" and PSD_tur is None and PSD_vib is None and file_path_matrix_R is not None:
+#     if variance_type == "meas" and PSD_tur is None and PSD_vib is None and file_path_matrix_R is not None:
        
-        H = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
-                                    den2, den3, transfer_function_type)  
+#         H = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
+#                                     den2, den3, transfer_function_type)  
       
-        sigma2_meas, PSD_out, PSD_in  = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
-                                                          photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture, 
-                                                          collecting_area, file_path_matrix_R, omega_temp_freq_interval, 
-                                                          H, actuators_number)
+#         sigma2_meas, PSD_out, PSD_in  = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
+#                                                           photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture, 
+#                                                           collecting_area, file_path_matrix_R, omega_temp_freq_interval, 
+#                                                           H, actuators_number)
       
       
-        print("Measure:", sigma2_meas)       
-        return sigma2_meas, PSD_out, PSD_in, H
+#         print("Measure:", sigma2_meas)       
+#         return sigma2_meas, PSD_out, PSD_in, H
       
       
 

@@ -11,7 +11,6 @@ Created on Fri Nov 14 15:17:28 2025
 import numpy as np 
 
 from src.Functions import turbulence_psd
-from src.Functions import variance
 from src.Functions import funct_d2
 from src.Functions import total_variance
 from src.Functions import interpolate_and_normalize_psd
@@ -243,12 +242,12 @@ var_total = total_variance(var_fit, var_temp, var_alias, var_meas)
 
 if display:
 
-    plot_total_variance_mode_0(gain_minimum, gain_maximum, omega_temporal_freqs, t_0, n1, n2, 
-                           n3, d1, d2, d3, Telescope_diameter, Fried_param, F_excess_noise, 
-                           sky_background, dark_current, readout_noise, phot_flux, FrameRate, Magnitudo, 
-                           n_subapert, CollectingArea, x_pixel, fitting_coeff, alpha_, seeing_, 
-                           Modulation_Radius, WindSpeed, Maximum_Rad_Ord_Corr, file_path_R1, file_optg,
-                           PSD_atmosf, PSD_wind_vib)
+    plot_total_variance_mode_0(gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
+                               t_0, n1, n2, n3, d1, d2, d3, Telescope_diameter, Fried_param, F_excess_noise, 
+                               sky_background, dark_current, readout_noise, phot_flux, FrameRate, Magnitudo, 
+                               n_subapert, CollectingArea, x_pixel, fitting_coeff, alpha_, seeing_, 
+                               Modulation_Radius, WindSpeed, Maximum_Rad_Ord_Corr, file_path_R1, file_optg,
+                               PSD_atmosf, PSD_wind_vib)
 
 
     plot(omega_temporal_freqs, H_r_temp, H_n_meas, H_n_alias, PSD_in_temp, PSD_out_temp,
