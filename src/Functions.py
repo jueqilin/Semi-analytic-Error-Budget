@@ -109,12 +109,12 @@ def transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, transfer_function_type):
 # Returns a 2D array of shape (n_modes, len(tempor_freqs)).
 # Default n_modes=2 reproduces the original tip-and-tilt behaviour.
 
-def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_altitude,
+def turbulence_psd(rho, theta, aperture_radius, aperture_center, Fried_parameter, L0, layers_altitude,
                    wind_speed, wind_direction, space_freqs, tempor_freqs, n_modes=2):
 
     source = GuideSource((rho, theta), np.inf)
     aperture = CircularOpticalAperture(aperture_radius, aperture_center)
-    cn2_profile = Cn2Profile.from_r0s(r0, L0, layers_altitude, wind_speed, wind_direction)
+    cn2_profile = Cn2Profile.from_r0s([Fried_parameter],[L0], [layers_altitude], [wind_speed], [wind_direction])
 
     vk = VonKarmanSpatioTemporalCovariance(
         source1=source, source2=source, aperture1=aperture, aperture2=aperture,

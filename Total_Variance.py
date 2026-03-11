@@ -43,13 +43,11 @@ Telescope_diameter = param['telescope']['telescope_diam']
 aperture_radius = param['telescope']['apert_radius']
 aperture_center = param['telescope']['apert_center']
   
-r0 = param['atmosphere']['Fried_parameter_ls']
 L0 = param['atmosphere']['Outer_scale']
 layers_altitude = param['atmosphere']['lay_altitude']
-wind_speed = param['atmosphere']['wind_sp']       # wind speed list
 wind_direction = param ['atmosphere']['wind_dir']
 Fried_param = param ['atmosphere']['Fried_par']
-WindSpeed = param ['atmosphere']['Wind_Speed']    # wind speed not list
+WindSpeed = param ['atmosphere']['Wind_Speed']    
 seeing_ = param ['atmosphere']['Seeing']
  
 rho = param['source']['radial_distance']
@@ -122,8 +120,8 @@ if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is N
 
 print("PSD windshake and corresponding frequencies loaded successfully.")
 
-PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_altitude, 
-                            wind_speed, wind_direction, spatial_freqs, temporal_freqs)
+PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, Fried_param, L0, layers_altitude, 
+                            WindSpeed, wind_direction, spatial_freqs, temporal_freqs, n_modes=2)
 
 d2 = funct_d2 (T_tot)
 

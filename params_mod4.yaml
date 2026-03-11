@@ -8,19 +8,15 @@ telescope:
   apert_center: [0, 0, 0]
 
 atmosphere: 
-  #Fried parameter (lista) in [m]
-  Fried_parameter_ls: [0.16]
   #Outer scale in [m]. 
-  Outer_scale: [25]
+  Outer_scale: 25
   #Altitude of the layer in [m]
-  lay_altitude: [10000]
-  #Wind speed in [m/s]
-  wind_sp: [8]
+  lay_altitude: 10000
   #Wind direction in [deg]
-  wind_dir: [0]
+  wind_dir: 0
   #Fried parameter in [m]
   Fried_par: 0.16           
-  #Wind speed in [m/s] not list
+  #Wind speed in [m/s] 
   Wind_Speed: 8
   #seeing in [arcsec]
   Seeing: 0.8
