@@ -95,30 +95,30 @@ class TestTurbulenceVariance(unittest.TestCase):
         cls.psd_atmo_sa = turbulence_psd(
             rho=0.0, theta=0.0,
             aperture_radius=_D / 2.0, aperture_center=[0.0, 0.0, 0.0],
-            r0=[_R0], L0=[_L0], layers_altitude=[_LAYERS_ALT],
-            wind_speed=[_WIND_SPEED], wind_direction=[_WIND_DIR],
+            Fried_parameter=_R0, L0=_L0, layers_altitude=_LAYERS_ALT,
+            wind_speed=_WIND_SPEED, wind_direction=_WIND_DIR,
             space_freqs=_FREQS_1oM, tempor_freqs=_FREQS_HZ, n_modes=3
         )
 
-        cls.var_tip_sa_rad2   = np.real(integrate.simpson(cls.psd_atmo_sa[0, :], _FREQS_HZ))
-        cls.var_tilt_sa_rad2  = np.real(integrate.simpson(cls.psd_atmo_sa[1, :], _FREQS_HZ))
-        cls.var_focus_sa_rad2 = np.real(integrate.simpson(cls.psd_atmo_sa[2, :], _FREQS_HZ))
+        cls.var_tip_sa_nm2   = np.real(integrate.simpson(cls.psd_atmo_sa[0, :], _FREQS_HZ))
+        cls.var_tilt_sa_nm2  = np.real(integrate.simpson(cls.psd_atmo_sa[1, :], _FREQS_HZ))
+        cls.var_focus_sa_nm2 = np.real(integrate.simpson(cls.psd_atmo_sa[2, :], _FREQS_HZ))
 
     def test_tip_tilt_variance_comparison(self):
         """
         Compares the total Tip+Tilt variance.
         """
         # ── SA: Tip + Tilt Variance ──────────────────────────────────────────
-        sa_tt_rad2 = self.var_tip_sa_rad2 + self.var_tilt_sa_rad2
-        rad2_to_nm2 = (_WVL_REF * 1e9 / (2.0 * np.pi)) ** 2
-        sa_tt_nm2 = sa_tt_rad2 * rad2_to_nm2
+        sa_tt_rad2 = self.var_tip_sa_nm2 + self.var_tilt_sa_nm2
+        sa_tt_nm2 = sa_tt_rad2
 
         # ── P3: Tip + Tilt Variance ──────────────────────────────────────────
         # pf_full is the Piston filter. TiltFilter() isolates high frequencies.
         psd_tt_p3 = self.Wphi_full * (self.pf_full - self.fao.TiltFilter())
 
         p3_tt_rad2 = float(np.sum(psd_tt_p3) * self.dk**2)
-        p3_tt_nm2 = p3_tt_rad2 * rad2_to_nm2
+        rad2nm = 500 / (2.0 * np.pi)
+        p3_tt_nm2 = p3_tt_rad2 * rad2nm**2
 
         if _VERBOSE:
             print("\n" + "="*60)
@@ -140,15 +140,15 @@ class TestTurbulenceVariance(unittest.TestCase):
         Compares the Focus variance.
         """
         # ── SA: Focus Variance ───────────────────────────────────────────────
-        rad2_to_nm2 = (_WVL_REF * 1e9 / (2.0 * np.pi)) ** 2
-        sa_focus_nm2 = self.var_focus_sa_rad2 * rad2_to_nm2
+        sa_focus_nm2 = self.var_focus_sa_nm2
 
         # ── P3: Focus Variance ───────────────────────────────────────────────
         # FocusFilter() acts as a high-pass filter for focus.
         psd_focus_p3 = self.Wphi_full * (1.0 - self.fao.FocusFilter())
 
         p3_focus_rad2 = float(np.sum(psd_focus_p3) * self.dk**2)
-        p3_focus_nm2 = p3_focus_rad2 * rad2_to_nm2
+        rad2nm = 500 / (2.0 * np.pi)
+        p3_focus_nm2 = p3_focus_rad2 * rad2nm**2
 
         if _VERBOSE:
             print("\n" + "="*60)
