@@ -46,10 +46,10 @@ aperture_center = param['telescope']['apert_center']
 L0 = param['atmosphere']['Outer_scale']
 layers_altitude = param['atmosphere']['lay_altitude']
 wind_direction = param ['atmosphere']['wind_dir']
-Fried_param = param ['atmosphere']['Fried_par']
 WindSpeed = param ['atmosphere']['Wind_Speed']    
 seeing_ = param ['atmosphere']['Seeing']
- 
+Fried_param = 0.98 * 500 / seeing_
+
 rho = param['source']['radial_distance']
 theta = param['source']['deg']
   
@@ -177,7 +177,7 @@ if display:
 
     plot(omega_temporal_freqs, H_r_temp, H_n_meas, H_n_alias, PSD_in_temp, PSD_out_temp,
          PSD_in_meas, PSD_out_meas, PSD_in_alias, PSD_out_alias)
-       
+                               
 
     plot_all_PSD(omega_temporal_freqs, PSD_out_temp, PSD_out_meas, PSD_out_alias)
 

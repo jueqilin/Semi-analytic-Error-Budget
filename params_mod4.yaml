@@ -13,9 +13,7 @@ atmosphere:
   #Altitude of the layer in [m]
   lay_altitude: 10000
   #Wind direction in [deg]
-  wind_dir: 0
-  #Fried parameter in [m]
-  Fried_par: 0.16           
+  wind_dir: 0           
   #Wind speed in [m/s] 
   Wind_Speed: 8
   #seeing in [arcsec]

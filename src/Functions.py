@@ -136,9 +136,9 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019)
 
-def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, Fried_parameter):
+def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0):
     
-    var_fitting = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter/Fried_parameter) ** (5/3)
+    var_fitting = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter/r0) ** (5/3)
     print("Fitting:", var_fitting)
     return var_fitting
 

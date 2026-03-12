@@ -30,6 +30,8 @@ from src.Functions import measure_variance
 from src.Functions import build_transfer_function
 from src.Functions import interpolate_and_normalize_psd
 
+##########
+
 
 # Function to compute the total residual variance for a set of gain values,
 # by combining fitting, temporal, aliasing and measurement error contributions 
@@ -46,15 +48,19 @@ def variance_total_for_test(number_of_actuators, gain_value_, omega_temp_freq_in
     
     for i in range(len(gain_value_)): 
         
-        g = gain_value_[i]                                                           
-        gain_val = np.array([g])                                                
+        g = gain_value_[i]                       ###############################                                     
+        gain_val = np.array([g])                                               
+
+###########################       
         
         H_r_temp = build_transfer_function(gain_val, omega_temp_freq_interval, t_0, number_of_actuators, num1, num2, num3, den1, den2, den3,"H_r")
         H_n_meas = build_transfer_function(gain_val, omega_temp_freq_interval, t_0, number_of_actuators, num1, num2, num3, den1, den2, den3,"H_n")
         H_n_alias = build_transfer_function(gain_val, omega_temp_freq_interval, t_0, number_of_actuators, num1, num2, num3, den1, den2, den3,"H_n")
         
+        
         variance_fit = fitting_variance(fitting_coeff, number_of_actuators, telescope_diameter, Fried_parameter) 
         
+         
         if np.array_equal(t_freqs, f): 
             
             variance_temporal,_ , _ = temporal_variance (PSD_turbolence, PSD_vibration_wind, H_r_temp, number_of_actuators, 
@@ -64,18 +70,23 @@ def variance_total_for_test(number_of_actuators, gain_value_, omega_temp_freq_in
             
             PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(t_freqs, f, PSD_vibration_wind, number_of_actuators)
             variance_temporal,_ , _ = temporal_variance (PSD_turbolence, PSD_wind_vib_interp_norm, 
-                                                         H_r_temp, number_of_actuators, omega_temp_freq_interval)
+                                                            H_r_temp, number_of_actuators, omega_temp_freq_interval)
 
+        
+        
+        
         variance_aliasing, _, _ = aliasing_variance(H_n_alias, number_of_actuators, omega_temp_freq_interval, 
-                                                    alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                                                    maximum_radial_order_corrected, file_path_reconstruction_matrix, gain_val)
+                                                       alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
+                                                       maximum_radial_order_corrected, file_path_reconstruction_matrix, gain_val)
+        
         
         variance_measurement, _, _ = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, 
-                                                       read_out_noise, photon_flux, telescope_diameter, 
-                                                       frame_rate, magnitudo, n_subaperture, 
-                                                       collecting_area, file_path_reconstruction_matrix,
-                                                       omega_temp_freq_interval, H_n_meas, number_of_actuators)
+                                                          read_out_noise, photon_flux, telescope_diameter, 
+                                                          frame_rate, magnitudo, n_subaperture, 
+                                                          collecting_area, file_path_reconstruction_matrix,
+                                                          omega_temp_freq_interval, H_n_meas, number_of_actuators)
         
+      
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
                                          np.real(variance_measurement), np.real(variance_aliasing))            
     
@@ -104,8 +115,8 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
                                              photon_flux, frame_rate, magnitudo, n_subaperture, collecting_area, 
                                              pixel_pos, fitting_coeff, alpha, seeing, 
                                              modulation_radius, windspeed, maximum_radial_order_corrected,
-                                             file_path_reconstruction_matrix, file_optg, 
-                                             PSD_turbolence, PSD_vibration_wind)
+                                             file_path_reconstruction_matrix, file_optg,
+PSD_turbolence, PSD_vibration_wind)
         
     plt.plot(gain_value, variance_total, marker='o')    
     plt.xlabel('Gain')
@@ -161,7 +172,7 @@ def plot_all_PSD(f, PSD_out_t, PSD_out_m, PSD_out_a):
 
     plt.xlabel("Frequency [rad/s]")
     plt.ylabel("PSD")
-    plt.title(f"PSD {labels[i]} – mode 0")
+    plt.title("PSDs – mode 0")
     plt.legend()
     plt.grid()
 
@@ -177,9 +188,7 @@ def plot_all_PSD(f, PSD_out_t, PSD_out_m, PSD_out_a):
 def check(file_path_matrix_R, telescope_diameter, seeing, modulation_radius,
           actuators_number, alpha, omega_temp_freq_interval, windspeed, 
           maximum_radial_order_corrected,file_optg, system="ANDES"):
-    
-    c_optg = 0
-    
+
     if system == "ANDES":
         c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius)
     # TODO not supported yet
@@ -236,16 +245,13 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
                           seeing, modulation_radius, windspeed, maximum_radial_order_corrected,
                           file_path_matrix_R, file_optg, system="ANDES"):
     
-    with fits.open("src/file_fits/ANDES/modal_psd_aliasing.fits") as hdul:          
-        data = hdul[0].data                                                    # pylint: disable=E1101
+    with fits.open("src/file_fits/ANDES/modal_psd_aliasing.fits") as hdul:
+        data = hdul[0].data 
         
         freq_hz = data[:, 0]
         mode_0 = data[:, 1]
         
         freq_rad_s = 2 * np.pi * freq_hz
-        
-        c_optg = 0
-        
         if system == "ANDES":
             c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius)
         # TODO not supported yet
@@ -292,29 +298,3 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
   
 
     
-        
-        
-    
-    
-
-    
-
-    
-    
-    
-          
-       
-        
-       
-        
-       
-        
-       
-        
-       
-        
-       
-        
-       
-        
-       
