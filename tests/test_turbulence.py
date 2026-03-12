@@ -95,7 +95,7 @@ class TestTurbulenceVariance(unittest.TestCase):
         cls.psd_atmo_sa = turbulence_psd(
             rho=0.0, theta=0.0,
             aperture_radius=_D / 2.0, aperture_center=[0.0, 0.0, 0.0],
-            Fried_parameter=_R0, L0=_L0, layers_altitude=_LAYERS_ALT,
+            r0=_R0, L0=_L0, layers_altitude=_LAYERS_ALT,
             wind_speed=_WIND_SPEED, wind_direction=_WIND_DIR,
             space_freqs=_FREQS_1oM, tempor_freqs=_FREQS_HZ, n_modes=3
         )
