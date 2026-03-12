@@ -90,6 +90,7 @@ _SA_SOUL_FITS = os.path.join(
 
 # ── Shared parameters and settings ──────────────────────────────────────────
 _VERBOSE    = False    # Set to True to enable prints during tests
+_VERBOSE    = False    # Set to True to enable prints during tests
 
 _GAIN       = 0.3
 _DELAY      = 2        # frames
@@ -697,7 +698,7 @@ class TestSlopeNoiseVariance(unittest.TestCase):
         # --- 6. Assertions ---
         self.assertAlmostEqual(
             sa_var, theory_var, places=12,
-            msg="SA does not match the theory (did you add ** 2 on read_out_noise in Functions.py?)"
+            msg="SA does not match the theory"
         )
 
         self.assertAlmostEqual(

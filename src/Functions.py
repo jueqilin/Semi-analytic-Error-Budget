@@ -123,6 +123,9 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     # Zernike indices: tip=2, tilt=3, focus=4, ...
     modes = list(range(2, 2 + n_modes))
     modes_psd = vk.getGeneralZernikeCPSD(j=modes, k=modes, temp_freqs=tempor_freqs)
+    
+    # from rad2 to nm2
+    modes_psd *= (500 / (2 * np.pi))**2
 
     # Diagonal elements give the temporal PSD of each mode
     PSD_atmo = np.array([modes_psd[i, i, :] for i in range(n_modes)])
