@@ -3,26 +3,14 @@ telescope:
   N_act: 2 
   # Primary mirror diameter in [m]
   telescope_diam: 38.5    
-  #Radius in [m] and center of the telescope aperture  
-  apert_radius: 19.25
-  apert_center: [0, 0, 0]
 
 atmosphere: 
   #Outer scale in [m]. 
-  Outer_scale: 25
-  #Altitude of the layer in [m]
-  lay_altitude: 10000
-  #Wind direction in [deg]
-  wind_dir: 0           
+  Outer_scale: 25           
   #Wind speed in [m/s] 
   Wind_Speed: 8
   #seeing in [arcsec]
   Seeing: 0.8
-  
-source:
-  #Polar coordinates in [arcsec, deg] of the source
-  radial_distance: 0
-  deg: 0
 
 wavefront_sensor:
   # Number whose square root is taken to compute the ‘Excess noise factor’(F_excess_noise = np.sqrt(value_for_F_excess_noise)).
@@ -56,12 +44,8 @@ polynomial_coefficients_array:
   n_3: [1]
 
 frequency_ranges:
-  # Spatial frequencies (abbiamo che: spatial_freqs = np.logspace(-4, 4, 100); in yaml non è supportato
-  # nè np.linspace nè np.logspace. Quindi devo costruire il vettore di spatial_freqs direttamente in python  )
-  spatial_freqs_min: -4
-  spatial_freqs_max: 4
-  spatial_freqs_n: 100
-  # Temporal frequencies in [Hz] (vedi sopra)
+  # Temporal frequencies in [Hz] (abbiamo che: temporal_freqs = np.logspace(-3, 3, 1000); in yaml non è supportato
+  # nè np.linspace nè np.logspace. Quindi devo costruire il vettore di temporal_freqs direttamente in python)
   temporal_freqs_min: -3
   temporal_freqs_max: 3
   temporal_freqs_n: 1000
@@ -82,12 +66,6 @@ loop parameters:
   Coeff_Modulation_Radius: 3
   #maximum radial order corrected
   Maximum_Radial_Order_Corrected: 88
-
-coefficients:
-  #Coefficient in the fitting error expression
-  fitting_coefficient: 0.2778 
-  #alpha
-  Alpha: -5.6666666667   # = -17/3
 
 pixel_params:
   # Number of photons for second for collecting area

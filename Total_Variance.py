@@ -40,19 +40,19 @@ print("Parameters loaded successfully.")
   
 n_actuators = param['telescope']['N_act']
 Telescope_diameter = param['telescope']['telescope_diam']
-aperture_radius = param['telescope']['apert_radius']
-aperture_center = param['telescope']['apert_center']
+aperture_radius = Telescope_diameter / 2
+aperture_center = [0, 0, 0]
   
 L0 = param['atmosphere']['Outer_scale']
-layers_altitude = param['atmosphere']['lay_altitude']
-wind_direction = param ['atmosphere']['wind_dir']
+layers_altitude = 0.0
+wind_direction = 0.0        #[deg]
 WindSpeed = param ['atmosphere']['Wind_Speed']    
 seeing_ = param ['atmosphere']['Seeing']
 Fried_param = 0.98 * 500 / seeing_
 
-rho = param['source']['radial_distance']
-theta = param['source']['deg']
-  
+rho = 0
+theta = 0
+
 value_F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
 F_excess_noise = np.sqrt(value_F_excess_noise)
 sky_background = param['wavefront_sensor']['sky_backgr']
@@ -69,10 +69,7 @@ n1 = param['polynomial_coefficients_array']['n_1']
 n2 = param['polynomial_coefficients_array']['n_2']
 n3 = param['polynomial_coefficients_array']['n_3']
   
-spatial_freqs_minimum = param['frequency_ranges']['spatial_freqs_min']
-spatial_freqs_maximum = param['frequency_ranges']['spatial_freqs_max']
-spatial_freqs_number = param['frequency_ranges']['spatial_freqs_n']
-spatial_freqs = np.logspace(spatial_freqs_minimum, spatial_freqs_maximum, spatial_freqs_number)
+spatial_freqs = np.logspace(-4, 4, 100)
 temporal_freqs_minimum = param['frequency_ranges']['temporal_freqs_min']
 temporal_freqs_maximum = param['frequency_ranges']['temporal_freqs_max']
 temporal_freqs_number = param['frequency_ranges']['temporal_freqs_n']
@@ -95,10 +92,10 @@ gain_ = np.linspace(gain_minimum, gain_maximum, gain_number)
 coeff_for_modulation_radius = param['loop parameters']['Coeff_Modulation_Radius']
 Modulation_Radius = coeff_for_modulation_radius
 Maximum_Rad_Ord_Corr = param['loop parameters']['Maximum_Radial_Order_Corrected']
-
-fitting_coeff = param['coefficients']['fitting_coefficient']
-alpha_ = param['coefficients']['Alpha']
-  
+ 
+fitting_coeff = 0.2778
+alpha_ = -17/3
+ 
 phot_flux = float(param['pixel_params']['flux_photons'])                       
 FrameRate = param['pixel_params']['frm_rate']
 Magnitudo = param['pixel_params']['magn']
@@ -109,8 +106,8 @@ x_pixel = param['pixel_params']['pixel_position']
 system = param['system definition']['System']
 
 
-display = True
 
+display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1)
 
@@ -130,6 +127,7 @@ c_optg = 0
 if system == "ANDES":
     
     c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing_, Modulation_Radius)
+
 
 H_r_temp = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3,d1, d2, d3,"H_r")
 H_n_meas = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3,d1, d2, d3,"H_n")

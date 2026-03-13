@@ -111,7 +111,7 @@ def transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, transfer_function_type):
 
 def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_altitude,
                    wind_speed, wind_direction, space_freqs, tempor_freqs, n_modes=2):
-
+    
     source = GuideSource((rho, theta), np.inf)
     aperture = CircularOpticalAperture(aperture_radius, aperture_center)
     cn2_profile = Cn2Profile.from_r0s([r0],[L0], [layers_altitude], [wind_speed], [wind_direction])
@@ -130,7 +130,7 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     # Diagonal elements give the temporal PSD of each mode
     PSD_atmo = np.array([modes_psd[i, i, :] for i in range(n_modes)])
 
-    return PSD_atmo
+    return PSD_atmo             
   
 
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
@@ -323,7 +323,7 @@ def _load_andes_gain_grid(file_mod0, file_mod4):
 # a 2D interpolation to estimate the gain for the given modulation radius and seeing
 
 def compute_andes_optical_gain(file_mod0, file_mod4,
-                                seeing, modulation_radius):
+                               seeing, modulation_radius):
     """
     Computes the optical gain for the ANDES system using 2D interpolation.
     Axes: modulation radius, seeing.
@@ -354,7 +354,6 @@ def double_interpolation_optical_gain(modal_radius_val, seeing_val, optical_gain
     interp_optical_gain = RegularGridInterpolator((modal_radius_val, seeing_val), optical_gain_grid, bounds_error=False, fill_value=None)  
      
     last_opt_gain = float(interp_optical_gain((modulation_radius, seeing)))
-    
     return last_opt_gain
 
 

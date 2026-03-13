@@ -501,8 +501,8 @@ class TestLoadParameters(unittest.TestCase):
 
     def test_expected_top_level_keys_present(self):
         params = load_parameters(self.yaml_path)
-        for key in ("telescope", "atmosphere", "source", "wavefront_sensor",
-                    "files", "frequency_ranges", "loop parameters", "coefficients"):
+        for key in ("telescope", "atmosphere", "wavefront_sensor",
+                    "files", "frequency_ranges", "loop parameters"):
             self.assertIn(key, params)
 
     def test_telescope_diameter_value(self):
