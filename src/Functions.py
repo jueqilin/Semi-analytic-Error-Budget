@@ -8,7 +8,9 @@ Created on Wed Nov 12 15:43:33 2025
 # pylint: disable=C
 
 import yaml
+import os
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from scipy import integrate
 from astropy.io import fits                                                    
 from functools import reduce                                                   
@@ -121,34 +123,34 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
         cn2_profile=cn2_profile, spat_freqs=space_freqs)
 
     modes = list(range(2, 2 + n_modes))
-    
+
+    # worker function to compute a single mode
+    def compute_single_mode(m):
+        psd = vk.getGeneralZernikeCPSD(j=[m], k=[m], temp_freqs=tempor_freqs)
+        return np.real(psd[0, 0, :])
+
     PSD_atmo = []
     
     # -------------------------------------------------------------------------
-    # OPTIMIZATION: Instead of having 'arte' compute the entire NxN matrix,
-    # we ask it only for the diagonal (each mode against itself), performing only
-    # N calculations.
+    # Multiprocessing approach.
     # -------------------------------------------------------------------------
-    for m in modes:
-        # We pass j=[m] and k=[m]. The result has shape (1, 1, N_freqs)
-        psd_singol_mode = vk.getGeneralZernikeCPSD(j=[m], k=[m], temp_freqs=tempor_freqs)
-        
-        # Extract the 1D array and append it to the list
-        PSD_atmo.append(psd_singol_mode[0, 0, :])
-        
-        # Optional print to check that the loop is progressing and not stuck:
-        if (m-1) % 500 == 0:
-            print(f" -> Calculated {m-1}/{n_modes} atmospheric modes...")
+    print(f" -> Parallel computation started on {os.cpu_count()} cores for {n_modes} modes...")
+    
+    with ThreadPoolExecutor() as executor:
+        for m, result in zip(modes, executor.map(compute_single_mode, modes)):
+            PSD_atmo.append(result)
+            if (m - 1) % 500 == 0:
+                print(f"    -> Completed {m - 1}/{n_modes} modes...")
 
     PSD_atmo = np.array(PSD_atmo)
 
-    # Conversion factor: (wavelength / (2 * pi))^2, where wavelength is the reference wavelength
+    # Convert from rad^2 to nm^2
     wvl_ref = 500e-9  
     rad2_to_nm2 = (wvl_ref * 1e9 / (2 * np.pi))**2
     PSD_atmo *= rad2_to_nm2
 
-    return np.real(PSD_atmo)         
-  
+    return PSD_atmo
+
 
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019)
