@@ -188,10 +188,3 @@ if display:
     plot_PSD_alias_mode_0(n_actuators, omega_temporal_freqs, alpha_, Telescope_diameter,
                           seeing_, Modulation_Radius, WindSpeed, Maximum_Rad_Ord_Corr,
                           file_path_R1, file_optg, system="ANDES")
-
-
-
-
-
-
-

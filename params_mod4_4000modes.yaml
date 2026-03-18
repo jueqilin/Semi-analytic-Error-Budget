@@ -1,6 +1,6 @@
 telescope:
   # Number of actuators
-  N_act: 2 
+  N_act: 4000
   # Primary mirror diameter in [m]
   telescope_diam: 38.5    
 
@@ -55,9 +55,9 @@ frequency_ranges:
 loop parameters:
   # Sampling time in [s]
   sampling_time: 0.001   
-  # Gain (abbiamo che: gain_ = np.linspace(0, (valore dipendente dal total delay), 2). Costruisco il vettore di gain_ direttamente in python)                        
-  gain_min: 0.01  
-  gain_n: 2
+  # Optional fixed gain for all modes (if set, overrides gain_n linspace)
+  gain_value: [0.5]
+  gain_n:     [4000]
   # Sensor sensitivity                   
   sensor_sensitivity: 1 
   # Total delay due to the wavefront sensor, real-time computer, and adaptive secondary mirror in [s] 
@@ -92,4 +92,4 @@ display:
   # Modes shown in summary plots (null => automatic selection)
   summary_modes_to_plot: null
   # Enable legacy plots/checks in addition to the new summary display
-  show_legacy_plots: true
+  show_legacy_plots: false

@@ -120,17 +120,34 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
         source1=source, source2=source, aperture1=aperture, aperture2=aperture,
         cn2_profile=cn2_profile, spat_freqs=space_freqs)
 
-    # Zernike indices: tip=2, tilt=3, focus=4, ...
     modes = list(range(2, 2 + n_modes))
-    modes_psd = vk.getGeneralZernikeCPSD(j=modes, k=modes, temp_freqs=tempor_freqs)
     
-    # from rad2 to nm2
-    modes_psd *= (500 / (2 * np.pi))**2
+    PSD_atmo = []
+    
+    # -------------------------------------------------------------------------
+    # OPTIMIZATION: Instead of having 'arte' compute the entire NxN matrix,
+    # we ask it only for the diagonal (each mode against itself), performing only
+    # N calculations.
+    # -------------------------------------------------------------------------
+    for m in modes:
+        # We pass j=[m] and k=[m]. The result has shape (1, 1, N_freqs)
+        psd_singol_mode = vk.getGeneralZernikeCPSD(j=[m], k=[m], temp_freqs=tempor_freqs)
+        
+        # Extract the 1D array and append it to the list
+        PSD_atmo.append(psd_singol_mode[0, 0, :])
+        
+        # Optional print to check that the loop is progressing and not stuck:
+        if (m-1) % 500 == 0:
+            print(f" -> Calculated {m-1}/{n_modes} atmospheric modes...")
 
-    # Diagonal elements give the temporal PSD of each mode
-    PSD_atmo = np.array([modes_psd[i, i, :] for i in range(n_modes)])
+    PSD_atmo = np.array(PSD_atmo)
 
-    return PSD_atmo             
+    # Conversion factor: (wavelength / (2 * pi))^2, where wavelength is the reference wavelength
+    wvl_ref = 500e-9  
+    rad2_to_nm2 = (wvl_ref * 1e9 / (2 * np.pi))**2
+    PSD_atmo *= rad2_to_nm2
+
+    return np.real(PSD_atmo)         
   
 
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
@@ -227,11 +244,27 @@ def load_PSD_windshake(file_path_wind):
 
 def resize_psd_like(PSD_atmo_turb, PSD_vibration):
     
-    PSD_vib_1= np.zeros_like(PSD_atmo_turb)  
-    m = PSD_vibration.shape[0]  
-    PSD_vib_1[:m, :] = PSD_vibration
+    PSD_vib_1= np.zeros_like(PSD_atmo_turb)
+    m = min(PSD_vibration.shape[0], PSD_vib_1.shape[0])
+    PSD_vib_1[:m, :] = PSD_vibration[:m, :]
     
     return PSD_vib_1
+
+
+def align_psd_modes(PSD_in, actuators_number):
+
+    PSD_in = np.asarray(PSD_in)
+
+    if PSD_in.ndim != 2:
+        raise ValueError("PSD input must be a 2D array")
+
+    n_modes_in, n_freq = PSD_in.shape
+
+    PSD_out = np.zeros((actuators_number, n_freq), dtype=PSD_in.dtype)
+    n_copy = min(n_modes_in, actuators_number)
+    PSD_out[:n_copy, :] = PSD_in[:n_copy, :]
+
+    return PSD_out
 
 
 # Computes the output PSD by applying the corresponding transfer function to the input PSD 
@@ -260,10 +293,12 @@ def compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, 
 # Agapito and Pinna, 2019)
 
 def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_number, omega_temp_freq_interval): 
-    
-    PSD_vib = resize_psd_like(PSD_atmo_turb, PSD_vibration)
-    
-    PSD_input = PSD_atmo_turb + PSD_vib
+
+    PSD_atmo = align_psd_modes(PSD_atmo_turb, actuators_number)
+    PSD_vib_aligned = align_psd_modes(PSD_vibration, actuators_number)
+    PSD_vib = resize_psd_like(PSD_atmo, PSD_vib_aligned)
+
+    PSD_input = PSD_atmo + PSD_vib
 
     variance_temp, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, omega_temp_freq_interval)
     print("Temporal:", variance_temp)  
@@ -588,12 +623,12 @@ def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_o
 
 def compute_noise_PSD(p_coefficient, omega_temp_freq_interval, actuators_number, sigma2_w):
     
-    PSD_w = np.zeros((len(p_coefficient), len(omega_temp_freq_interval)))   
+    PSD_w = np.zeros((actuators_number, len(omega_temp_freq_interval)))
   
     omega_interval_min = np.min(omega_temp_freq_interval)                 
     omega_interval_max = np.max(omega_temp_freq_interval)
    
-    for i in range (actuators_number):  
+    for i in range(actuators_number):
 
         PSD_w[i, :] = sigma2_w[i] /(omega_interval_max -  omega_interval_min) 
 
@@ -625,6 +660,10 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
    
     print("Propagation coefficients loaded successfully.")
     
+    if len(p_coefficient) < actuators_number:
+        raise ValueError("Not enough propagation coefficients for the selected number of modes")
+
+    p_coefficient = p_coefficient[:actuators_number]
     sigma2_w = p_coefficient * slope_noise_variance
     
     PSD_input =  compute_noise_PSD (p_coefficient, omega_temp_freq_interval, actuators_number, sigma2_w)
@@ -661,23 +700,27 @@ def interpolate_vector(x_interpolation, x_original, vector_original):
 # Function to interpolate and normalize PSD to a new frequency interval.
 
 def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_original, actuators_number):
-    
-    PSD_interpolated = np.zeros_like(PSD_original)
-    PSD_interpolated_normalized = np.zeros_like(PSD_original)
+
+    PSD_original = np.asarray(PSD_original)
+    PSD_interpolated = np.zeros((actuators_number, len(freqs_interpolation)))
+    PSD_interpolated_normalized = np.zeros_like(PSD_interpolated)
     sigma2 = np.zeros(actuators_number)
     sigma2_interp = np.zeros(actuators_number)
     
     Omega_freqs_interpolation = 2 * np.pi * freqs_interpolation  
     Omega_freqs_original = 2 * np.pi * freqs_original
     
-    for i in range (actuators_number):
-        
-        PSD_interpolated[i, :]=interpolate_vector(freqs_interpolation, freqs_original, PSD_original[i, :])
+    n_modes_available = min(actuators_number, PSD_original.shape[0])
 
-        sigma2 [i] = integrate.simpson(PSD_original[i, :], Omega_freqs_original)
+    for i in range(n_modes_available):
+
+        PSD_interpolated[i, :] = interpolate_vector(freqs_interpolation, freqs_original, PSD_original[i, :])
+
+        sigma2[i] = integrate.simpson(PSD_original[i, :], Omega_freqs_original)
         sigma2_interp[i] = integrate.simpson(PSD_interpolated[i, :], Omega_freqs_interpolation)
-   
-        PSD_interpolated_normalized [i, :]= (PSD_interpolated[i, :]) * (sigma2[i])/(sigma2_interp[i])
+
+        if sigma2_interp[i] > 0:
+            PSD_interpolated_normalized[i, :] = PSD_interpolated[i, :] * sigma2[i] / sigma2_interp[i]
 
     return PSD_interpolated_normalized
          
