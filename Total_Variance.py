@@ -31,11 +31,6 @@ from src.plots import plot_PSD_alias_mode_0
 from src.plots import plot
 
 param = load_parameters('params_mod4.yaml')
-
-if param is None: 
-    
-    raise RuntimeError("Parameters not loaded")                                                                  
-      
 print("Parameters loaded successfully.")
   
 n_actuators = param['telescope']['N_act']
@@ -62,6 +57,7 @@ readout_noise = param['wavefront_sensor']['noise_readout']
 file_path_R1 = param['files']['file_path_reconstruction_matrix1']
 file_path_wind1 = param['files']['file_path_PSD_windshake1']
 file_optg = param['files']['file_optg']
+file_sigma_slope = param['files']['file_path_sigmaslope']
 
 d1 = param['polynomial_coefficients_array']['d_1']
 d3 = param['polynomial_coefficients_array']['d_3']
@@ -149,7 +145,7 @@ else:
 
 var_alias, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs, 
                                                   alpha_, Telescope_diameter, seeing_, Modulation_Radius, WindSpeed, 
-                                                  Maximum_Rad_Ord_Corr, file_path_R1, c_optg)
+                                                  Maximum_Rad_Ord_Corr, file_path_R1, c_optg, file_sigma_slope)
 
 
 var_meas, PSD_out_meas, PSD_in_meas  = measure_variance (F_excess_noise, x_pixel, sky_background, dark_current, readout_noise,
@@ -170,7 +166,7 @@ if display:
                                sky_background, dark_current, readout_noise, phot_flux, FrameRate, Magnitudo, 
                                n_subapert, CollectingArea, x_pixel, fitting_coeff, alpha_, seeing_, 
                                Modulation_Radius, WindSpeed, Maximum_Rad_Ord_Corr, file_path_R1, file_optg,
-                               PSD_atmosf, PSD_wind_vib)
+                               PSD_atmosf, PSD_wind_vib, file_sigma_slope)
 
 
     plot(omega_temporal_freqs, H_r_temp, H_n_meas, H_n_alias, PSD_in_temp, PSD_out_temp,
@@ -182,12 +178,12 @@ if display:
 
     check(file_path_R1, Telescope_diameter, seeing_, Modulation_Radius, 
           n_actuators, alpha_, omega_temporal_freqs, WindSpeed, Maximum_Rad_Ord_Corr,
-          file_optg, system="ANDES")
+          file_optg, file_sigma_slope, system="ANDES")
 
 
     plot_PSD_alias_mode_0(n_actuators, omega_temporal_freqs, alpha_, Telescope_diameter,
                           seeing_, Modulation_Radius, WindSpeed, Maximum_Rad_Ord_Corr,
-                          file_path_R1, file_optg, system="ANDES")
+                          file_path_R1, file_optg, file_sigma_slope, system="ANDES")
 
 
 
