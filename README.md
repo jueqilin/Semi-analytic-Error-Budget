@@ -19,7 +19,7 @@ The project has been modularized to separate core mathematical functions, visual
 * **`src/fits_file`**: Directory with data files.
 * **`examples/plot_psds.py`**: A standalone script dedicated to performing and plotting the spectral analysis (PSDs) in closed loop for specific Zernike modes.
 * **`examples/verify_aliasing_energy.py`**: A validation script that checks the aliasing energy conservation by comparing the variance calculated from slopes vs. the numerical integral of the SA PSD.
-* **`examples/main_saeb.py`**: Command-line entrypoint to run the error budget simulation with a YAML file.
+* **`scripts/main_saeb.py`**: Command-line entrypoint to run the error budget simulation with a YAML file.
 * **`Total_variance.py`**: A script designed to run the error budget simulation.
 
 ### Configuration Files
