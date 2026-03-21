@@ -4,8 +4,8 @@
 """Main entrypoint for Semi-analytic Error Budget runs.
 
 Usage:
-    python scripts/main_sa.py params_mod4_4000modes.yaml
-    python scripts/main_sa.py run params_mod4_4000modes.yaml
+    python scripts/main_saeb.py params_mod4_4000modes.yaml
+    python scripts/main_saeb.py run params_mod4_4000modes.yaml
 """
 
 import argparse
@@ -161,6 +161,11 @@ def run(yaml_file):
     file_path_R1 = param['files']['file_path_reconstruction_matrix1']
     file_path_wind1 = param['files']['file_path_PSD_windshake1']
     file_optg = param['files']['file_optg']
+    file_sigma_slope = param['files'].get('file_path_sigma_slopes',
+                                          param['files'].get('file_path_sigmaslope', None))
+
+    if file_sigma_slope is None:
+        raise KeyError("Missing 'file_path_sigma_slopes' (or legacy 'file_path_sigmaslope') in files section")
 
     d1 = param['polynomial_coefficients_array']['d_1']
     d3 = param['polynomial_coefficients_array']['d_3']
@@ -250,7 +255,8 @@ def run(yaml_file):
     var_alias, PSD_out_alias, _ = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
                                                     alpha_, telescope_diameter, seeing_,
                                                     modulation_radius, wind_speed,
-                                                    maximum_rad_order_corr, file_path_R1, c_optg)
+                                                    maximum_rad_order_corr, file_path_R1, c_optg,
+                                                    file_sigma_slope)
 
     var_meas, PSD_out_meas, _ = measure_variance(F_excess_noise, x_pixel, sky_background,
                                                  dark_current, readout_noise, phot_flux,

@@ -7,7 +7,7 @@ Usage:
     python Total_Variance_4000modes.py run params_mod4_4000modes.yaml
 """
 
-from scripts.main_sa import main
+from scripts.main_saeb import main
 
 
 if __name__ == "__main__":

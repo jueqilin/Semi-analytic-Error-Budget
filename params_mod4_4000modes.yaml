@@ -29,6 +29,8 @@ files:
   file_path_PSD_windshake1: "src/file_fits/ANDES/morfeo_windshake8ms_psd_2022_1k.fits"
   # file path dei modelli di modulazione (mod0 e mod4)
   file_optg: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"] 
+  # file path delle sigma slopes da aliasing
+  file_path_sigmaslope: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
 
 polynomial_coefficients_array:
   # Array of denominator polynomial coefficients of the W function.
