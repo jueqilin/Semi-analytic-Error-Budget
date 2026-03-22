@@ -28,6 +28,7 @@ from src.Functions import interpolate_and_normalize_psd
 from src.Functions import load_parameters
 from src.Functions import load_PSD_windshake
 from src.Functions import measure_variance
+from src.Functions import radial_order_from_n_modes
 from src.Functions import temporal_variance
 from src.Functions import total_variance
 from src.Functions import turbulence_psd
@@ -94,15 +95,18 @@ def _build_gain_vector(loop_params, n_actuators):
         else:
             return np.full(n_actuators, float(gain_value))
 
-    if gain_number == n_actuators:
-        if gain_maximum is None:
-            raise ValueError("Unsupported total_delay for gain mapping")
-        return np.linspace(gain_minimum, gain_maximum, gain_number)
-
     if gain_number == 1:
         return np.full(n_actuators, float(gain_minimum))
 
-    raise ValueError("Set gain_n to 1 or N_act, or provide gain_value/gain_vector")
+    if gain_number is not None and gain_number > 1:
+        raise ValueError(
+            f"gain_n={gain_number} > 1 implies a gain sweep (as in Total_Variance.py). "
+            "main_saeb.py does not support gain optimisation. "
+            "Use gain_n: 1 with gain_min for a uniform gain, "
+            "or use gain_value / gain_vector for explicit per-mode assignment."
+        )
+
+    raise ValueError("Set gain_n: 1 with gain_min, or provide gain_value/gain_vector")
 
 
 def _integrate_modal_psd(psd_matrix, omega_vector):
@@ -137,16 +141,16 @@ def run(yaml_file):
 
     print("Parameters loaded successfully.")
 
-    n_actuators = param['telescope']['N_act']
+    n_actuators = param['control']['n_modes']
     telescope_diameter = param['telescope']['telescope_diam']
     aperture_radius = telescope_diameter / 2
     aperture_center = [0, 0, 0]
 
-    outer_scale = param['atmosphere']['Outer_scale']
+    outer_scale = param['atmosphere']['outer_scale']
     layers_altitude = 0.0
     wind_direction = 0.0
-    wind_speed = param['atmosphere']['Wind_Speed']
-    seeing_ = param['atmosphere']['Seeing']
+    wind_speed = param['atmosphere']['wind_speed']
+    seeing_ = param['atmosphere']['seeing']
     fried_param = 0.98 * 500 / seeing_
 
     rho = 0
@@ -158,48 +162,44 @@ def run(yaml_file):
     dark_current = param['wavefront_sensor']['dark_curr']
     readout_noise = param['wavefront_sensor']['noise_readout']
 
-    file_path_R1 = param['files']['file_path_reconstruction_matrix1']
-    file_path_wind1 = param['files']['file_path_PSD_windshake1']
-    file_optg = param['files']['file_optg']
-    file_sigma_slope = param['files'].get('file_path_sigma_slopes',
-                                          param['files'].get('file_path_sigmaslope', None))
+    file_path_R1 = param['data']['reconstruction_matrix']
+    file_path_wind1 = param['data']['windshake_psd']
+    file_optg = param['data']['optical_gain_models']
+    file_sigma_slope = param['data']['sigma_slopes']
 
-    if file_sigma_slope is None:
-        raise KeyError("Missing 'file_path_sigma_slopes' (or legacy 'file_path_sigmaslope') in files section")
+    d1 = param['plant']['d_1']
+    d3 = param['plant']['d_3']
+    n1 = param['plant']['n_1']
+    n2 = param['plant']['n_2']
+    n3 = param['plant']['n_3']
 
-    d1 = param['polynomial_coefficients_array']['d_1']
-    d3 = param['polynomial_coefficients_array']['d_3']
-    n1 = param['polynomial_coefficients_array']['n_1']
-    n2 = param['polynomial_coefficients_array']['n_2']
-    n3 = param['polynomial_coefficients_array']['n_3']
+    control = param['control']
+    t_0 = control['sampling_time']
+    total_delay = control['total_delay']
+    gain_ = _build_gain_vector(control, n_actuators)
+    modulation_radius = param['wavefront_sensor']['modulation_radius']
+    maximum_rad_order_corr = radial_order_from_n_modes(n_actuators)
 
     spatial_freqs = np.logspace(-4, 4, 100)
     temporal_freqs_minimum = param['frequency_ranges']['temporal_freqs_min']
-    temporal_freqs_maximum = param['frequency_ranges']['temporal_freqs_max']
+    temporal_freqs_maximum = np.log10(1.0 / (2.0 * t_0))
     temporal_freqs_number = param['frequency_ranges']['temporal_freqs_n']
     temporal_freqs = np.logspace(temporal_freqs_minimum,
                                  temporal_freqs_maximum,
                                  temporal_freqs_number)
     omega_temporal_freqs = 2 * np.pi * temporal_freqs
 
-    loop_params = param['loop parameters']
-    t_0 = loop_params['sampling_time']
-    total_delay = loop_params['total_delay']
-    gain_ = _build_gain_vector(loop_params, n_actuators)
-    modulation_radius = loop_params['Coeff_Modulation_Radius']
-    maximum_rad_order_corr = loop_params['Maximum_Radial_Order_Corrected']
-
     fitting_coeff = 0.2778
     alpha_ = -17 / 3
 
-    phot_flux = float(param['pixel_params']['flux_photons'])
-    frame_rate = param['pixel_params']['frm_rate']
-    magnitudo = param['pixel_params']['magn']
-    n_subapert = param['pixel_params']['number_of_sub']
-    collecting_area = param['pixel_params']['collect_area']
-    x_pixel = param['pixel_params']['pixel_position']
+    phot_flux = float(param['guide_star']['flux_photons'])
+    frame_rate = 1.0 / t_0
+    magnitudo = param['guide_star']['magn']
+    n_subapert = param['wavefront_sensor']['number_of_sub']
+    collecting_area = param['telescope']['collect_area']
+    x_pixel = control['slope_computer_weights']
 
-    system = param['system definition']['System']
+    system = param['system']['name']
 
     display_cfg = param.get('display', {})
     display = bool(display_cfg.get('enabled', True))

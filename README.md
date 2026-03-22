@@ -25,7 +25,7 @@ The project has been modularized to separate core mathematical functions, visual
 ### Configuration Files
 
 
-*These files control telescope properties, atmospheric conditions (seeing, wind speed, $r_0$, $L_0$), WFS characteristics, paths to FITS files (reconstruction matrices, optical gains), and AO loop parameters.*
+*These files control telescope properties, atmospheric conditions (seeing, wind speed, $r_0$, $L_0$), WFS characteristics, data paths (reconstruction matrices, optical gains), and AO control parameters.*
 
 ## Dependencies
 

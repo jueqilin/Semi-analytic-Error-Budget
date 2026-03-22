@@ -23,6 +23,15 @@ from arte.atmo.von_karman_covariance_calculator import VonKarmanSpatioTemporalCo
 from arte.atmo.cn2_profile import Cn2Profile                                                                                     
 
 
+DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    'src',
+    'file_fits',
+    'ANDES',
+    'slopes_rms_time_avg_all.fits'
+)
+
+
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
 
 def load_parameters(yaml_file):
@@ -49,6 +58,20 @@ def funct_d2 (T_total):
     d2[0] = 1
     
     return d2
+
+
+def radial_order_from_n_modes(n_modes):
+    n_modes = int(n_modes)
+
+    if n_modes < 1:
+        raise ValueError("n_modes must be >= 1")
+
+    radial_order = int(np.floor((np.sqrt(1 + 8 * n_modes) - 3) / 2))
+
+    if radial_order < 0:
+        raise ValueError("Computed radial order is negative; check n_modes")
+
+    return radial_order
 
 
 # Function that returns the numerator and denominator of the transfer function C, 
@@ -435,7 +458,9 @@ def compute_soul_optical_gain(filepath, target_mod_modes, target_binning, target
 
 # Function to read and return the sigma slopes data from the FITS file.
 
-def read_sigma_slopes(file_path_sigma_slopes):
+def read_sigma_slopes(file_path_sigma_slopes=None):
+    if file_path_sigma_slopes is None:
+        file_path_sigma_slopes = DEFAULT_SIGMA_SLOPES_PATH
     
     
     with fits.open (file_path_sigma_slopes) as hdul:
@@ -491,7 +516,7 @@ def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, c, teles
 
 def k_coeff_aliasing(modulation_radius, seeing, c, alpha, telescope_diameter, 
                      omega_temp_freq_interval, file_path_matrix_R, windspeed,
-                     maximum_radial_order_corrected, file_path_sigma_slopes):
+                     maximum_radial_order_corrected, file_path_sigma_slopes=None):
     
     data_slopes = read_sigma_slopes(file_path_sigma_slopes)  
     
@@ -549,7 +574,7 @@ def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, c, k,
 def PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,  
                   telescope_diameter, seeing, modulation_radius, windspeed,
                   maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
-                  file_path_sigma_slopes):
+                  file_path_sigma_slopes=None):
     
     k = k_coeff_aliasing(modulation_radius, seeing, c_optg, alpha, telescope_diameter,
                          omega_temp_freq_interval, file_path_matrix_R, windspeed,
@@ -569,7 +594,7 @@ def PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,
 def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval, 
                        alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
                        maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
-                       file_path_sigma_slopes):
+                       file_path_sigma_slopes=None):
     
     PSD_input = PSD_aliasing(actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
                              seeing, modulation_radius, windspeed, maximum_radial_order_corrected,
