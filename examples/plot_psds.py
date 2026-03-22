@@ -22,57 +22,57 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     # 1. Load parameters
     param = load_parameters('params_mod4.yaml')
 
-    n_actuators = param['telescope']['N_act']
+    n_actuators = param['control']['n_modes']
     D = param['telescope']['telescope_diam']
-    aperture_radius = param['telescope']['apert_radius']
-    aperture_center = param['telescope']['apert_center']
+    aperture_radius = D / 2.0
+    aperture_center = [0, 0, 0]
 
-    r0 = param['atmosphere']['Fried_par']
-    L0 = param['atmosphere']['Outer_scale']
-    layers_altitude = param['atmosphere']['lay_altitude']
-    wind_direction = param['atmosphere']['wind_dir']
-    wind_speed = param['atmosphere']['Wind_Speed']
-    seeing = param['atmosphere']['Seeing']
+    L0 = param['atmosphere']['outer_scale']
+    layers_altitude = 0.0
+    wind_direction = 0.0
+    wind_speed = param['atmosphere']['wind_speed']
+    seeing = param['atmosphere']['seeing']
+    r0 = 0.98 * 500 / seeing
 
     F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
     sky_background = param['wavefront_sensor']['sky_backgr']
     dark_current = param['wavefront_sensor']['dark_curr']
     readout_noise = param['wavefront_sensor']['noise_readout']
 
-    file_path_R1 = param['files']['file_path_reconstruction_matrix1']
-    file_mod0 = param['files']['file_optg'][0]
-    file_mod4 = param['files']['file_optg'][1]
+    file_path_R1 = param['data']['reconstruction_matrix']
+    file_mod0 = param['data']['optical_gain_models'][0]
+    file_mod4 = param['data']['optical_gain_models'][1]
+    sigma_slopes_path = param['data']['sigma_slopes']
 
-    d1 = param['polynomial_coefficients_array']['d_1']
-    d3 = param['polynomial_coefficients_array']['d_3']
-    n1 = param['polynomial_coefficients_array']['n_1']
-    n2 = param['polynomial_coefficients_array']['n_2']
-    n3 = param['polynomial_coefficients_array']['n_3']
+    d1 = param['plant']['d_1']
+    d3 = param['plant']['d_3']
+    n1 = param['plant']['n_1']
+    n2 = param['plant']['n_2']
+    n3 = param['plant']['n_3']
 
-    frame_rate = param['pixel_params']['frm_rate']
+    t_0 = param['control']['sampling_time']
+    frame_rate = 1.0 / t_0
     temporal_freqs = np.logspace(-3, np.log10(frame_rate / 2.0), 1000)
     omega = 2 * np.pi * temporal_freqs
 
-    spatial_freqs_min = param['frequency_ranges']['spatial_freqs_min']
-    spatial_freqs_max = param['frequency_ranges']['spatial_freqs_max']
-    spatial_freqs_n = param['frequency_ranges']['spatial_freqs_n']
-    spatial_freqs = np.logspace(spatial_freqs_min, spatial_freqs_max, spatial_freqs_n)
+    spatial_freqs = np.logspace(-4, 4, 100)
 
-    t_0 = param['loop parameters']['sampling_time']
-    T_tot = param['loop parameters']['total_delay']
-    Modulation_Radius = param['loop parameters']['Coeff_Modulation_Radius']
-    Maximum_Rad_Ord_Corr = param['loop parameters']['Maximum_Radial_Order_Corrected']
-    alpha_ = param['coefficients']['Alpha']
+    T_tot = param['control']['total_delay']
+    modulation_radius = param['wavefront_sensor']['modulation_radius']
+    maximum_radial_order = n_actuators
+    alpha_ = -17 / 3
 
-    phot_flux = float(param['pixel_params']['flux_photons'])                 
-    Magnitudo = param['pixel_params']['magn']
-    n_subapert = param['pixel_params']['number_of_sub']
-    CollectingArea = param['pixel_params']['collect_area']
-    x_pixel = param['pixel_params']['pixel_position']
+    phot_flux = float(param['guide_star']['flux_photons'])
+    magnitude = param['guide_star']['magn']
+    n_subapert = param['wavefront_sensor']['number_of_sub']
+    collecting_area = param['telescope']['collect_area']
+    x_pixel = param['control']['slope_computer_weights']
 
-    gain_mapping = {1: 2.0, 2: 1.0, 3: 0.6, 4: 0.4}
-    gain_max = gain_mapping.get(T_tot, 0.5)
-    gain_array = np.full(n_actuators, gain_max)
+    gain_value = param['control'].get('gain_value')
+    if gain_value is not None:
+        gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
+    else:
+        gain_array = np.full(n_actuators, float(param['control']['gain_min']))
 
     d2 = funct_d2(T_tot)
 
@@ -86,7 +86,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     H_n = build_transfer_function(gain_array, omega, t_0, n_actuators, n1, n2, n3, d1, d2, d3, "H_n")
 
     # 4. Compute Optical Gain (needed for aliasing)
-    c_optg = compute_andes_optical_gain(file_mod0, file_mod4, seeing, Modulation_Radius)
+    c_optg = compute_andes_optical_gain(file_mod0, file_mod4, seeing, modulation_radius)
 
     # 5. Extract PSDs from separate functions
     _, PSD_out_temp, PSD_in_temp = temporal_variance(
@@ -94,15 +94,18 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     )
 
     _, PSD_out_alias, PSD_in_alias = aliasing_variance(
-        H_n, n_actuators, omega, alpha_, D, seeing, Modulation_Radius, wind_speed,
-        Maximum_Rad_Ord_Corr, file_path_R1, c_optg
+        H_n, n_actuators, omega, alpha_, D, seeing, modulation_radius, wind_speed,
+        maximum_radial_order, file_path_R1, c_optg, sigma_slopes_path
     )
 
     _, PSD_out_meas, PSD_in_meas = measure_variance(
         F_excess_noise, x_pixel, sky_background, dark_current, readout_noise,
-        phot_flux, D, frame_rate, Magnitudo, n_subapert, CollectingArea,
+        phot_flux, D, frame_rate, magnitude, n_subapert, collecting_area,
         file_path_R1, omega, H_n, n_actuators
     )
+
+    if mode_index < 0 or mode_index >= n_actuators:
+        raise ValueError(f"mode_index must be between 0 and {n_actuators - 1}")
 
     PSD_in_temp = np.real(PSD_in_temp)
     PSD_in_alias = np.real(PSD_in_alias)
@@ -154,7 +157,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
                color='black', linewidth=3, linestyle='-.')
 
     plt.title(f"Spectral Analysis (PSD) in Closed Loop - Zernike Mode {mode_index}"
-              f"\nLoop Gain = {gain_max:.2f}", fontsize=14)
+              f"\nLoop Gain = {gain_array[0]:.2f}", fontsize=14)
     plt.xlabel("Temporal Frequency [Hz]", fontsize=12)
     plt.ylabel("Power Spectral Density [nm² / Hz]", fontsize=12)
     plt.grid(True, which="both", linestyle=":", alpha=0.7)

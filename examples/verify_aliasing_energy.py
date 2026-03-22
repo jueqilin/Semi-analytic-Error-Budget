@@ -24,21 +24,21 @@ def verify_aliasing_energy():
     # 1. Load Parameters
     param = load_parameters('params_mod4.yaml')
     D = param['telescope']['telescope_diam']
-    r0 = param['atmosphere']['Fried_par']
-    wvl_ref = 500e-9
-    seeing = 0.98 * wvl_ref / r0 * (3600 * 180 / np.pi)
-    modulation_radius = param['loop parameters']['Coeff_Modulation_Radius']
-    alpha = param['coefficients']['Alpha']
-    wind_speed = param['atmosphere']['Wind_Speed']
-    max_rad_ord = param['loop parameters']['Maximum_Radial_Order_Corrected']
-    n_actuators = 10
+    seeing = param['atmosphere']['seeing']
+    modulation_radius = param['wavefront_sensor']['modulation_radius']
+    alpha = -17 / 3
+    n_actuators = param['control']['n_modes']
+    wind_speed = param['atmosphere']['wind_speed']
+    max_rad_ord = n_actuators
 
-    file_mod0 = param['files']['file_optg'][0]
-    file_mod4 = param['files']['file_optg'][1]
-    file_reconstructor = param['files']['file_path_reconstruction_matrix1']
+    file_mod0 = param['data']['optical_gain_models'][0]
+    file_mod4 = param['data']['optical_gain_models'][1]
+    file_reconstructor = param['data']['reconstruction_matrix']
+    file_sigma_slopes = param['data']['sigma_slopes']
 
-    frame_rate = param['pixel_params']['frm_rate']
-    temporal_freqs = np.logspace(-3, np.log10(frame_rate / 2.0), 1000)
+    t_0 = param['control']['sampling_time']
+    frame_rate = 1.0 / t_0
+    temporal_freqs = np.logspace(-3, np.log10(1.0 / (2.0 * t_0)), 1000)
     omega_sa = 2 * np.pi * temporal_freqs
 
     # 2. Compute Optical Gain
@@ -47,7 +47,7 @@ def verify_aliasing_energy():
     # --------------------------------------------------------------------------------
     # METHOD 1: Direct target variance
     # ---------------------------------------------------------------------------
-    data_slopes = read_sigma_slopes() # No arguments, uses internal path
+    data_slopes = read_sigma_slopes(file_sigma_slopes)
     seeing_vals = data_slopes[0,0,:]                                           
     modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
 
@@ -66,7 +66,7 @@ def verify_aliasing_energy():
     # --------------------------------------------------------------------------------
     psd_sa = PSD_aliasing(
         n_actuators, omega_sa, alpha, D, seeing, modulation_radius, 
-        wind_speed, max_rad_ord, file_reconstructor, c_optg
+        wind_speed, max_rad_ord, file_reconstructor, c_optg, file_sigma_slopes
     )
     var_from_psd = integrate.simpson(psd_sa, omega_sa, axis=-1)
 
@@ -76,7 +76,7 @@ def verify_aliasing_energy():
     file_psd_passata = "src/file_fits/ANDES/modal_psd_aliasing.fits"
     try:
         with fits.open(file_psd_passata) as hdul:
-            psd_passata = hdul[0].data
+            psd_passata = hdul[0].data # pylint: disable=no-member
 
         freq_passata = np.linspace(0, frame_rate / 2.0, psd_passata.shape[1])
         omega_passata = 2 * np.pi * freq_passata
@@ -89,12 +89,16 @@ def verify_aliasing_energy():
     # --------------------------------------------------------------------------------
     # PRINT RESULTS
     # --------------------------------------------------------------------------------
+    n_modes_report = min(len(var_from_slopes), len(var_from_psd))
+    if passata_available:
+        n_modes_report = min(n_modes_report, len(var_passata))
+
     print(f"shape var_from_psd: {var_from_psd.shape}, shape omega_sa: {omega_sa.shape}")
     print(f"{'Mode':<6} | {'Var from Slopes (SA)':<22} | {'Var PSD Integral (SA)':<22}"
           f" | {'Var PASSATA Integral':<22}")
     print("-" * 80)
 
-    for i in range(min(10, len(var_from_slopes))):
+    for i in range(min(10, n_modes_report)):
         pass_val = f"{var_passata[i]:.4e}" if passata_available else "N/A"
         print(f"{i:<6} | {var_from_slopes[i]:<22.4e} | {var_from_psd[i]:<22.4e} | {pass_val:<22}")
 

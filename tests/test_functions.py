@@ -502,7 +502,7 @@ class TestLoadParameters(unittest.TestCase):
     def test_expected_top_level_keys_present(self):
         params = load_parameters(self.yaml_path)
         for key in ("telescope", "atmosphere", "wavefront_sensor",
-                    "files", "frequency_ranges", "loop parameters"):
+                    "data", "frequency_ranges", "control"):
             self.assertIn(key, params)
 
     def test_telescope_diameter_value(self):
@@ -511,7 +511,7 @@ class TestLoadParameters(unittest.TestCase):
 
     def test_number_of_actuators(self):
         params = load_parameters(self.yaml_path)
-        self.assertIsInstance(params["telescope"]["N_act"], int)
+        self.assertIsInstance(params["control"]["n_modes"], int)
 
 
 class _ChdirMixin:
@@ -550,11 +550,13 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
 class TestReadSigmaSlopes(_ChdirMixin, unittest.TestCase):
     """read_sigma_slopes reads slope RMS data from FITS."""
 
+    FILE = "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
+
     def test_returns_ndarray(self):
-        self.assertIsInstance(read_sigma_slopes(), np.ndarray)
+        self.assertIsInstance(read_sigma_slopes(self.FILE), np.ndarray)
 
     def test_non_negative_values(self):
-        self.assertTrue(np.all(read_sigma_slopes() >= 0))
+        self.assertTrue(np.all(read_sigma_slopes(self.FILE) >= 0))
 
 
 class TestLoadPSDWindshake(_ChdirMixin, unittest.TestCase):

@@ -60,6 +60,7 @@ _SA_RECONSTRUCTOR = os.path.join(
 # Nota: Assicurati che i file per ANDES_og_mod0.fits e mod4 siano nella cartella corretta
 _SA_OPT_GAIN_MOD0 = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES", "ANDES_og_mod0.fits")
 _SA_OPT_GAIN_MOD4 = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES", "ANDES_og_mod4.fits")
+_SA_SIGMA_SLOPES = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES", "slopes_rms_time_avg_all.fits")
 
 
 # ── Shared Physics Parameters ────────────────────────────────────────────────
@@ -160,7 +161,7 @@ class TestAliasingVariance(unittest.TestCase):
         var_alias_sa_rad2, _, _ = aliasing_variance(
             H_n, _N_MODES, _OMEGA, _ALPHA, _D, seeing_arcsec,
             _MODULATION_RADIUS, _WIND_SPEED, _MAX_RADIAL_ORDER,
-            _SA_RECONSTRUCTOR, c_optg
+            _SA_RECONSTRUCTOR, c_optg, _SA_SIGMA_SLOPES
         )
 
         # SA variance is in nm^2.
