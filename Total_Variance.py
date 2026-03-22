@@ -16,6 +16,7 @@ from src.Functions import total_variance
 from src.Functions import interpolate_and_normalize_psd
 from src.Functions import load_parameters
 from src.Functions import load_PSD_windshake
+from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
 from src.Functions import compute_andes_optical_gain
@@ -109,7 +110,7 @@ else:
 if gain_.size != n_actuators:
     raise ValueError(f"Gain vector length {gain_.size} does not match n_modes={n_actuators}")
 modulation_radius = param['wavefront_sensor']['modulation_radius']
-maximum_radial_order = n_actuators
+maximum_radial_order = radial_order_from_n_modes(n_actuators)
  
 fitting_coeff = 0.2778
 alpha_ = -17/3

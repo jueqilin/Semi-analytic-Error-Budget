@@ -60,6 +60,20 @@ def funct_d2 (T_total):
     return d2
 
 
+def radial_order_from_n_modes(n_modes):
+    n_modes = int(n_modes)
+
+    if n_modes < 1:
+        raise ValueError("n_modes must be >= 1")
+
+    radial_order = int(np.floor((np.sqrt(1 + 8 * n_modes) - 3) / 2))
+
+    if radial_order < 0:
+        raise ValueError("Computed radial order is negative; check n_modes")
+
+    return radial_order
+
+
 # Function that returns the numerator and denominator of the transfer function C, 
 # expressed as polynomials in Z. The function also returns the numeric definition of Z.
 # For the moment, we are considering the control function C as defined below,

@@ -28,6 +28,7 @@ from src.Functions import interpolate_and_normalize_psd
 from src.Functions import load_parameters
 from src.Functions import load_PSD_windshake
 from src.Functions import measure_variance
+from src.Functions import radial_order_from_n_modes
 from src.Functions import temporal_variance
 from src.Functions import total_variance
 from src.Functions import turbulence_psd
@@ -177,7 +178,7 @@ def run(yaml_file):
     total_delay = control['total_delay']
     gain_ = _build_gain_vector(control, n_actuators)
     modulation_radius = param['wavefront_sensor']['modulation_radius']
-    maximum_rad_order_corr = n_actuators
+    maximum_rad_order_corr = radial_order_from_n_modes(n_actuators)
 
     spatial_freqs = np.logspace(-4, 4, 100)
     temporal_freqs_minimum = param['frequency_ranges']['temporal_freqs_min']

@@ -12,7 +12,8 @@ from src.Functions import (
     load_parameters,
     read_sigma_slopes,
     double_interpolation_sigma_slope,
-    extract_propagation_coefficients
+    extract_propagation_coefficients,
+    radial_order_from_n_modes
 )
 
 def verify_aliasing_energy():
@@ -29,7 +30,7 @@ def verify_aliasing_energy():
     alpha = -17 / 3
     n_actuators = param['control']['n_modes']
     wind_speed = param['atmosphere']['wind_speed']
-    max_rad_ord = n_actuators
+    max_rad_ord = radial_order_from_n_modes(n_actuators)
 
     file_mod0 = param['data']['optical_gain_models'][0]
     file_mod4 = param['data']['optical_gain_models'][1]

@@ -13,7 +13,8 @@ from src.Functions import (
     measure_variance,
     build_transfer_function,
     compute_andes_optical_gain,
-    funct_d2
+    funct_d2,
+    radial_order_from_n_modes
 )
 
 def plot_system_psds(mode_index=0, plot_inputs=False):
@@ -59,7 +60,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
 
     T_tot = param['control']['total_delay']
     modulation_radius = param['wavefront_sensor']['modulation_radius']
-    maximum_radial_order = n_actuators
+    maximum_radial_order = radial_order_from_n_modes(n_actuators)
     alpha_ = -17 / 3
 
     phot_flux = float(param['guide_star']['flux_photons'])
