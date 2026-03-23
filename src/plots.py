@@ -547,11 +547,11 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
 # Function to compute and plot the total open-loop and closed-loop PSD (mode 0) 
 # by summing temporal, aliasing, and measurement contributions.
 
-def total_PSD_OL_CL (gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3,
-                     PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                     maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
-                     photon_flux,frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies, 
-                     file_path_matrix_R, file_path_sigma_slopes):
+def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3,
+                           PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
+                           maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
+                           photon_flux,frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies, 
+                           file_path_matrix_R, file_path_sigma_slopes):
     
     H_r = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3, "H_r")
     H_n = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1,  den2, den3, "H_n")
@@ -580,12 +580,12 @@ def total_PSD_OL_CL (gain, omega_temp_freq_interval, t_0, actuators_number, num1
                                                               omega_temp_freq_interval, H_n, actuators_number)
     
     
-    PSD_total_input = PSD_input_temp[0] + PSD_input_alias[0] + PSD_input_meas[0]
+    PSD_total_input_mode0 = PSD_input_temp[0] + PSD_input_alias[0] + PSD_input_meas[0]
     
-    PSD_total_output = PSD_output_temp[0] + PSD_output_alias[0] + PSD_output_meas[0]
+    PSD_total_output_mode0 = PSD_output_temp[0] + PSD_output_alias[0] + PSD_output_meas[0]
 
-    plt.loglog(omega_temp_freq_interval, PSD_total_input, label = "PSD total mode 0 - OPEN LOOP")  
-    plt.loglog(omega_temp_freq_interval, PSD_total_output, label = "PSD total mode 0 - CLOSED LOOP")    
+    plt.loglog(omega_temp_freq_interval, PSD_total_input_mode0, label = "PSD total mode 0 - OPEN LOOP")  
+    plt.loglog(omega_temp_freq_interval, PSD_total_output_mode0, label = "PSD total mode 0 - CLOSED LOOP")    
     plt.xlabel('Frequency[rad/s]')
     plt.ylabel('Total PSD')
     plt.title('Total PSD (PSD temp + PSD alias + PSD meas) mode 0')

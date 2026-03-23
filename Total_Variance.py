@@ -31,7 +31,7 @@ from src.plots import plot_all_PSD
 from src.plots import check
 from src.plots import plot_PSD_alias_mode_0
 from src.plots import plot
-from src.plots import total_PSD_OL_CL
+from src.plots import plot_PSD_OL_CL_mode_0
 
 
 param = load_parameters('params_mod4.yaml')
@@ -247,11 +247,11 @@ if display:
                           file_path_R1, file_optg, file_sigma_slope, system="ANDES")
 
 
-    total_PSD_OL_CL(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
-                    PSD_atmosf, PSD_wind_vib, alpha_, telescope_diameter, seeing, modulation_radius, wind_speed, 
-                    maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
-                    phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
-                    file_path_R1, file_sigma_slope)
+    plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
+                          PSD_atmosf, PSD_wind_vib, alpha_, telescope_diameter, seeing, modulation_radius, wind_speed, 
+                          maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
+                          phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
+                          file_path_R1, file_sigma_slope)
 
 
 

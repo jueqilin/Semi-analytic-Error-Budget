@@ -791,15 +791,80 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
     return PSD_interpolated_normalized
 
 
+# Function to obtain the PSDs (temp, alias, meas) OL and CL 
+
+def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, actuators_number, 
+                       alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
+                       maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, 
+                       dark_curr, read_out_noise, photon_flux, frame_rate, magnitudo, 
+                       n_subaperture, collecting_area, temporal_frequencies, frequencies,
+                       H_r, H_n, file_path_matrix_R, file_path_sigma_slopes):
+    
+    if np.array_equal(temporal_frequencies, frequencies):
+    
+        _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_vibration, H_r,  
+                                                                   actuators_number, omega_temp_freq_interval)
+        
+    else:
+        
+        PSD_wind_vib_interp_normalized = interpolate_and_normalize_psd(temporal_frequencies, frequencies, PSD_vibration, actuators_number)
+        _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_wind_vib_interp_normalized, 
+                                                                   H_r, actuators_number, omega_temp_freq_interval)
+        
+        
+    
+    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, 
+                                                                 alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
+                                                                 maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
+                                                                 file_path_sigma_slopes)  
+    
+    _, _, PSD_output_meas, PSD_input_meas = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
+                                                              photon_flux, telescope_diameter,frame_rate, magnitudo, 
+                                                              n_subaperture, collecting_area, file_path_matrix_R, 
+                                                              omega_temp_freq_interval, H_n, actuators_number)
+    
+    return PSD_output_temp, PSD_input_temp, PSD_output_alias, PSD_input_alias, PSD_output_meas, PSD_input_meas
+
+
+# Function to compute the total PSDs (temp + alias + meas) OL and CL 
+
+def total_PSD_OL_CL (gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3,
+                     PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
+                     maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
+                     photon_flux,frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies, 
+                     file_path_matrix_R, file_path_sigma_slopes):
+    
+    H_r = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3, "H_r")
+    H_n = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1,  den2, den3, "H_n")
+    
+   
+    PSD_out_temp, PSD_in_temp, PSD_out_alias, PSD_in_alias, PSD_out_meas, PSD_in_meas = compute_PSD_OL_CL(PSD_atmo_turb, PSD_vibration, 
+                                                                                                          omega_temp_freq_interval, actuators_number, 
+                                                                                                          alpha, telescope_diameter, seeing, 
+                                                                                                          modulation_radius, windspeed, 
+                                                                                                          maximum_radial_order_corrected, 
+                                                                                                          c_optg, F_excess, pixel_pos, 
+                                                                                                          sky_bkg, dark_curr, read_out_noise,
+                                                                                                          photon_flux, frame_rate, magnitudo, 
+                                                                                                          n_subaperture, collecting_area, 
+                                                                                                          temporal_frequencies, frequencies, 
+                                                                                                          H_r, H_n, file_path_matrix_R,  
+                                                                                                          file_path_sigma_slopes)
+    
+    
+    PSD_total_input = PSD_in_temp + PSD_in_alias + PSD_in_meas
+    
+    PSD_total_output = PSD_out_temp + PSD_out_alias + PSD_out_meas
+    
+    return PSD_total_input, PSD_total_output
+
+
 # Function to compute the total variance by summing fitting variance, temporal variance, and meas variance contributions.
 
 def total_variance(fit_err, temp_err, alias_err, meas_err):
     var_tot = np.real(fit_err) + np.real(temp_err) + np.real(meas_err) + np.real(alias_err)
     print ("Total variance:", var_tot)
     return var_tot 
-
-
-
 
 
          
