@@ -239,32 +239,29 @@ def run(yaml_file):
     PSD_wind_vib_to_display = None
 
     if np.array_equal(temporal_freqs, freq):
-        var_temp, PSD_out_temp, _ = temporal_variance(PSD_atmosf,
-                                                      PSD_wind_vib,
-                                                      H_r_temp,
-                                                      n_actuators,
-                                                      omega_temporal_freqs)
+        _, var_temp_CL, PSD_out_temp, _ = temporal_variance(PSD_atmosf, PSD_wind_vib, H_r_temp, 
+                                                            n_actuators, omega_temporal_freqs)
         PSD_wind_vib_to_display = PSD_wind_vib
     else:
         PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(temporal_freqs, freq,
                                                                  PSD_wind_vib, n_actuators)
-        var_temp, PSD_out_temp, _ = temporal_variance(PSD_atmosf, PSD_wind_vib_interp_norm,
-                                                      H_r_temp, n_actuators, omega_temporal_freqs)
+        _, var_temp_CL, PSD_out_temp, _ = temporal_variance(PSD_atmosf, PSD_wind_vib_interp_norm,
+                                                            H_r_temp, n_actuators, omega_temporal_freqs)
         PSD_wind_vib_to_display = PSD_wind_vib_interp_norm
 
-    var_alias, PSD_out_alias, _ = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
-                                                    alpha_, telescope_diameter, seeing_,
-                                                    modulation_radius, wind_speed,
-                                                    maximum_rad_order_corr, file_path_R1, c_optg,
-                                                    file_sigma_slope)
+    _, var_alias_CL, PSD_out_alias, _ = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
+                                                          alpha_, telescope_diameter, seeing_,
+                                                          modulation_radius, wind_speed,
+                                                          maximum_rad_order_corr, file_path_R1, c_optg,
+                                                          file_sigma_slope)
 
-    var_meas, PSD_out_meas, _ = measure_variance(F_excess_noise, x_pixel, sky_background,
-                                                 dark_current, readout_noise, phot_flux,
-                                                 telescope_diameter, frame_rate, magnitudo,
-                                                 n_subapert, collecting_area, file_path_R1,
-                                                 omega_temporal_freqs, H_n_meas, n_actuators)
+    _, var_meas_CL, PSD_out_meas, _ = measure_variance(F_excess_noise, x_pixel, sky_background,
+                                                       dark_current, readout_noise, phot_flux,
+                                                       telescope_diameter, frame_rate, magnitudo,
+                                                       n_subapert, collecting_area, file_path_R1,
+                                                       omega_temporal_freqs, H_n_meas, n_actuators)
 
-    total_variance(var_fit, var_temp, var_alias, var_meas)
+    total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL)
 
     if not display:
         return

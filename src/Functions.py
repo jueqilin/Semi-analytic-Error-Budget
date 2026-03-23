@@ -60,6 +60,8 @@ def funct_d2 (T_total):
     return d2
 
 
+# Function to compute the maximum radial order from the total number of corrected modes 
+
 def radial_order_from_n_modes(n_modes):
     n_modes = int(n_modes)
 
@@ -263,23 +265,13 @@ def load_PSD_windshake(file_path_wind):
             
             print(exc)
             return None, None
+ 
     
-
-# Function to resize the vibration PSD to match the size of the atmospheric turbulence PSD 
-# by filling with zeros, if needed.
-
-def resize_psd_like(PSD_atmo_turb, PSD_vibration):
-    
-    PSD_vib_1= np.zeros_like(PSD_atmo_turb)
-    m = min(PSD_vibration.shape[0], PSD_vib_1.shape[0])
-    PSD_vib_1[:m, :] = PSD_vibration[:m, :]
-    
-    return PSD_vib_1
-
+# Function to resize PSD so the number of modes matches the number of actuators
 
 def align_psd_modes(PSD_in, actuators_number):
 
-    PSD_in = np.asarray(PSD_in)
+    PSD_in = np.asarray(PSD_in)  
 
     if PSD_in.ndim != 2:
         raise ValueError("PSD input must be a 2D array")
@@ -290,27 +282,60 @@ def align_psd_modes(PSD_in, actuators_number):
     n_copy = min(n_modes_in, actuators_number)
     PSD_out[:n_copy, :] = PSD_in[:n_copy, :]
 
-    return PSD_out
+    return PSD_out 
+ 
+    
+# Function to resize the vibration PSD to match the size of the atmospheric turbulence PSD 
+# by filling with zeros, if needed.
+
+def resize_psd_like(PSD_atmo_turb, PSD_vibration):
+    
+    PSD_vib_1= np.zeros_like(PSD_atmo_turb)
+    m = min(PSD_vibration.shape[0], PSD_vib_1.shape[0])
+    PSD_vib_1[:m, :] = PSD_vibration[:m, :]
+    
+    return PSD_vib_1  
 
 
 # Computes the output PSD by applying the corresponding transfer function to the input PSD 
 # (using the function "func_out"). Than, the function integrates each modal output PSD over 
 # the given frequency range, as described in Equation (8), (10) and (15) in "Semianalytical error budget 
-# for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna (2019).
+# for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna (2019). 
+# The function also allows the computation of the variance in the open loop case.
 
 def compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, omega_temp_freq_interval):
     
-    variance_ = 0 
+    variance_OL = 0 
+    variance_CL = 0 
     
     PSD_out = np.zeros_like(PSD_input)
     
     for i in range (actuators_number):                                  
          
+        integral_OL = integrate_function(PSD_input[i, :], omega_temp_freq_interval)
+        variance_OL += integral_OL
+        
         PSD_out[i, :] = func_out(transf_funct[i, :], PSD_input[i, :])
-        integral = integrate_function(PSD_out[i, :], omega_temp_freq_interval)
-        variance_ += integral
+        integral_CL = integrate_function(PSD_out[i, :], omega_temp_freq_interval)
+        variance_CL += integral_CL
          
-    return variance_, PSD_out
+    return variance_OL, variance_CL, PSD_out
+
+
+# Function to compute vibration variance in open loop and closed loop, returning also open loop and closed loop PSDs
+
+def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp_freq_interval):
+ 
+    PSD_vib = align_psd_modes(PSD_vibration, actuators_number)
+    PSD_input = PSD_vib
+    
+    variance_vibr_OL, variance_vibr_CL, PSD_output = compute_output_PSD_and_integrate (actuators_number, transf_funct, 
+                                                                                       PSD_input, omega_temp_freq_interval)
+
+    print("Vibration_OL:", variance_vibr_OL)  
+    print("Vibration_CL:", variance_vibr_CL)  
+    
+    return variance_vibr_OL, variance_vibr_CL, PSD_output, PSD_input 
 
 
 # Computes the temporal variance by resizing the vibration PSD, summing atmospheric turbulence PSD 
@@ -318,7 +343,8 @@ def compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, 
 # See Equation (8) (in "Semianalytical error budget for adaptive optics systems with pyramid wavefront sensors", 
 # Agapito and Pinna, 2019)
 
-def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_number, omega_temp_freq_interval): 
+def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_number, 
+                       omega_temp_freq_interval): 
 
     PSD_atmo = align_psd_modes(PSD_atmo_turb, actuators_number)
     PSD_vib_aligned = align_psd_modes(PSD_vibration, actuators_number)
@@ -326,10 +352,13 @@ def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_num
 
     PSD_input = PSD_atmo + PSD_vib
 
-    variance_temp, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, omega_temp_freq_interval)
-    print("Temporal:", variance_temp)  
+    variance_temp_OL, variance_temp_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
+                                                                                      PSD_input, omega_temp_freq_interval)
     
-    return variance_temp, PSD_output, PSD_input 
+    print("Temporal_OL:", variance_temp_OL) 
+    print("Temporal_CL:", variance_temp_CL) 
+    
+    return variance_temp_OL, variance_temp_CL, PSD_output, PSD_input 
 
 
 # Function to extract the noise propagation coefficients from the reconstruction matrix.
@@ -579,6 +608,7 @@ def PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,
     k = k_coeff_aliasing(modulation_radius, seeing, c_optg, alpha, telescope_diameter,
                          omega_temp_freq_interval, file_path_matrix_R, windspeed,
                          maximum_radial_order_corrected, file_path_sigma_slopes)
+    
     PSD_alias = aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, 
                                          c_optg, k, alpha, telescope_diameter, 
                                          windspeed, maximum_radial_order_corrected)
@@ -594,17 +624,20 @@ def PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,
 def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval, 
                        alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
                        maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
-                       file_path_sigma_slopes=None):
+                       file_path_sigma_slopes):
     
     PSD_input = PSD_aliasing(actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
                              seeing, modulation_radius, windspeed, maximum_radial_order_corrected,
                              file_path_matrix_R, c_optg, file_path_sigma_slopes)
     
-    variance_alias, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct,
-                                                                  PSD_input, omega_temp_freq_interval)
-    print("Aliasing:", variance_alias)  
     
-    return variance_alias, PSD_output, PSD_input 
+    variance_alias_OL, variance_alias_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
+                                                                                        PSD_input, omega_temp_freq_interval)
+    
+    print("Aliasing_OL:", variance_alias_OL)  
+    print("Aliasing_CL:", variance_alias_CL)  
+    
+    return variance_alias_OL, variance_alias_CL, PSD_output, PSD_input 
     
 
 # Function to compute the photon flux per frame per pixel, accounting for frame rate, 
@@ -678,8 +711,7 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                       collecting_area, file_path_matrix_R, omega_temp_freq_interval, 
                       transf_funct, actuators_number):
     
-    variance_meas = 0
-    
+  
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
                                                         read_out_noise, photon_flux, telescope_diameter,
                                                         frame_rate, magnitudo, n_subaperture, collecting_area)
@@ -700,10 +732,12 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     PSD_input =  compute_noise_PSD (p_coefficient, omega_temp_freq_interval, actuators_number, sigma2_w)
     
-    variance_meas, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
-                                                                 PSD_input, omega_temp_freq_interval)
-    print("Measure:", variance_meas)  
-    return variance_meas, PSD_output, PSD_input 
+    variance_meas_OL, variance_meas_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
+                                                                                      PSD_input, omega_temp_freq_interval)
+    print("Measure_OL:", variance_meas_OL)  
+    print("Measure_CL:", variance_meas_CL)  
+    
+    return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
     
 
 # Function to compute the transfer function H; it internally computes n4 and d4 
@@ -755,7 +789,7 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
             PSD_interpolated_normalized[i, :] = PSD_interpolated[i, :] * sigma2[i] / sigma2_interp[i]
 
     return PSD_interpolated_normalized
-         
+
 
 # Function to compute the total variance by summing fitting variance, temporal variance, and meas variance contributions.
 
@@ -763,4 +797,32 @@ def total_variance(fit_err, temp_err, alias_err, meas_err):
     var_tot = np.real(fit_err) + np.real(temp_err) + np.real(meas_err) + np.real(alias_err)
     print ("Total variance:", var_tot)
     return var_tot 
+
+
+
+
+
+         
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

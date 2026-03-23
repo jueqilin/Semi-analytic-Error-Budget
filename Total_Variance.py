@@ -24,12 +24,15 @@ from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
 from src.Functions import measure_variance
+from src.Functions import vibration_variance
 
 from src.plots import plot_total_variance_mode_0
 from src.plots import plot_all_PSD
 from src.plots import check
 from src.plots import plot_PSD_alias_mode_0
 from src.plots import plot
+from src.plots import total_PSD_OL_CL
+
 
 param = load_parameters('params_mod4.yaml')
 print("Parameters loaded successfully.")
@@ -153,30 +156,65 @@ H_n_meas = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators
 H_n_alias = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3,d1, d2, d3,"H_n")
 
 
+#################
+# FIT  ---->  Variance 
+#################
+
 var_fit = fitting_variance(fitting_coeff, n_actuators, telescope_diameter, fried_param)
+
+#################
+# VIBRATIONS  ---->  Variance OL, Variance CL, PSD CL, PSD OL
+#################
 
 
 if np.array_equal(temporal_freqs, freq): 
-    
-    var_temp, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib, H_r_temp, n_actuators, omega_temporal_freqs)
+
+    var_vibr_OL, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance (PSD_wind_vib, H_r_temp, n_actuators, omega_temporal_freqs)
 
 else: 
     
     PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(temporal_freqs, freq, PSD_wind_vib, n_actuators)
-    var_temp, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib_interp_norm, H_r_temp, n_actuators, omega_temporal_freqs)
+    var_vibr_OL, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance (PSD_wind_vib_interp_norm, H_r_temp, 
+                                                                              n_actuators, omega_temporal_freqs)
+    
+
+#################
+# TEMPORAL  ---->  Variance OL, Variance CL, PSD CL, PSD OL
+#################
 
 
-var_alias, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs, 
-                                                  alpha_, telescope_diameter, seeing, modulation_radius, wind_speed,
-                                                  maximum_radial_order, file_path_R1, c_optg, file_sigma_slope)
+if np.array_equal(temporal_freqs, freq): 
+    
+    var_temp_OL, var_temp_CL, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib, H_r_temp, n_actuators, 
+                                                                             omega_temporal_freqs)
+
+else: 
+    
+    PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(temporal_freqs, freq, PSD_wind_vib, n_actuators)
+    var_temp_OL, var_temp_CL, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib_interp_norm, 
+                                                                             H_r_temp, n_actuators, omega_temporal_freqs)
 
 
-var_meas, PSD_out_meas, PSD_in_meas  = measure_variance (F_excess_noise, x_pixel, sky_background, dark_current, readout_noise,
-                                                  phot_flux, telescope_diameter, frame_rate, magnitude, n_subapert,
-                                                  collecting_area, file_path_R1, omega_temporal_freqs,
-                                                  H_n_meas, n_actuators)
+#################
+# ALIASING  ---->  Variance OL, Variance CL, PSD CL, PSD OL
+#################
 
-var_total = total_variance(var_fit, var_temp, var_alias, var_meas)
+var_alias_OL, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs, 
+                                                                            alpha_, telescope_diameter, seeing, modulation_radius,
+                                                                            wind_speed,maximum_radial_order, file_path_R1, c_optg, 
+                                                                            file_sigma_slope)
+#################
+# MEAS  ---->  Variance OL, Variance CL, PSD CL, PSD OL
+#################
+
+var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas  = measure_variance (F_excess_noise, x_pixel, sky_background, dark_current, 
+                                                                         readout_noise, phot_flux, telescope_diameter, frame_rate, 
+                                                                         magnitude, n_subapert, collecting_area, file_path_R1, 
+                                                                         omega_temporal_freqs, H_n_meas, n_actuators)
+print ("OPEN LOOP:")
+var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL)
+print ("CLOSED LOOP:")
+var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL)
 
 
 ##### PLOTS AND CHECKS
@@ -209,7 +247,11 @@ if display:
                           file_path_R1, file_optg, file_sigma_slope, system="ANDES")
 
 
-
+    total_PSD_OL_CL(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
+                    PSD_atmosf, PSD_wind_vib, alpha_, telescope_diameter, seeing, modulation_radius, wind_speed, 
+                    maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
+                    phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
+                    file_path_R1, file_sigma_slope)
 
 
 
