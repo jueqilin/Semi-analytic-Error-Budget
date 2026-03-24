@@ -50,16 +50,6 @@ def load_parameters(yaml_file):
             raise FileNotFoundError from exc
 
 
-# Function to define the d2 array, whose length depends on the value of T_total.
-
-def funct_d2 (T_total):
-    
-    d2 = np.zeros(T_total + 1)
-    d2[0] = 1
-    
-    return d2
-
-
 # Function to compute the maximum radial order from the total number of corrected modes 
 
 def radial_order_from_n_modes(n_modes):
@@ -74,6 +64,16 @@ def radial_order_from_n_modes(n_modes):
         raise ValueError("Computed radial order is negative; check n_modes")
 
     return radial_order
+
+
+# Function to define the d2 array, whose length depends on the value of T_total.
+
+def funct_d2 (T_total):
+    
+    d2 = np.zeros(T_total + 1)
+    d2[0] = 1
+    
+    return d2
 
 
 # Function that returns the numerator and denominator of the transfer function C, 
@@ -131,7 +131,57 @@ def transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, transfer_function_type):
     
     else: 
         raise ValueError("Transfer_function_type must be one of 'H_r' o 'H_n'")
+        
+        
+# Function to compute the numerator and denominator coefficients (n4 and d4) of the transfer function C 
+# for all actuators, and to return the numeric Z vector from funct_C.
 
+def compute_n4_d4(gain, omega_temp_freq_interval, t_0, actuators_number):
+    
+    n4_array_example, d4_array_example, _ = funct_C(gain[0], omega_temp_freq_interval, t_0)        
+ 
+    len_n4 =  len(n4_array_example)
+    len_d4 =  len(d4_array_example)
+ 
+    n4_array = np.zeros((actuators_number, len_n4), dtype=complex)      
+    d4_array = np.zeros((actuators_number, len_d4), dtype=complex)      
+       
+    for i in range (actuators_number):                                   
+         
+        n4_array[i, :], d4_array[i, :], Z_num = funct_C (gain[i], omega_temp_freq_interval, t_0)     
+         
+    return n4_array, d4_array, Z_num
+  
+
+# Function to compute the transfer function H.
+# The 'transfer_function_type' argument selects between two different types of transfer functions: "H_r" or "H_n".
+
+def compute_H(actuators_number, omega_temp_freq_interval, num1, num2, num3, num4, den1, den2,
+              den3, den4, Z, transfer_function_type):
+    
+    H = np.zeros((actuators_number, len(omega_temp_freq_interval)), dtype=complex)
+    
+    for i in range(actuators_number):
+        
+        H[i, :] = transfer_funct(num1, num2, num3, num4[i, :], den1, den2, den3, den4[i, :], Z,
+                                transfer_function_type)
+            
+    return H
+
+
+# Function to compute the transfer function H; it internally computes n4 and d4 
+# (numerator and denominator of function C) and then builds H using these polynomials.
+
+def build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
+                            den2, den3, transfer_function_type):   
+    
+    num4, den4, Z = compute_n4_d4(gain, omega_temp_freq_interval, t_0, actuators_number)
+
+    transfer_function = compute_H (actuators_number, omega_temp_freq_interval, num1, num2, num3, num4, den1, 
+                                   den2, den3, den4, Z, transfer_function_type)
+         
+    return transfer_function    
+    
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
 # Returns a 2D array of shape (n_modes, len(tempor_freqs)).
@@ -187,42 +237,6 @@ def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0):
     print("Fitting:", var_fitting)
     return var_fitting
 
-
-# Function to compute the numerator and denominator coefficients (n4 and d4) of the transfer function C 
-# for all actuators, and to return the numeric Z vector from funct_C.
-
-def compute_n4_d4(gain, omega_temp_freq_interval, t_0, actuators_number):
-    
-    n4_array_example, d4_array_example, _ = funct_C(gain[0], omega_temp_freq_interval, t_0)        
- 
-    len_n4 =  len(n4_array_example)
-    len_d4 =  len(d4_array_example)
- 
-    n4_array = np.zeros((actuators_number, len_n4), dtype=complex)      
-    d4_array = np.zeros((actuators_number, len_d4), dtype=complex)      
-       
-    for i in range (actuators_number):                                   
-         
-        n4_array[i, :], d4_array[i, :], Z_num = funct_C (gain[i], omega_temp_freq_interval, t_0)     
-         
-    return n4_array, d4_array, Z_num
-  
-
-# Function to compute the transfer function H.
-# The 'transfer_function_type' argument selects between two different types of transfer functions: "H_r" or "H_n".
-
-def compute_H(actuators_number, omega_temp_freq_interval, num1, num2, num3, num4, den1, den2,
-              den3, den4, Z, transfer_function_type):
-    
-    H = np.zeros((actuators_number, len(omega_temp_freq_interval)), dtype=complex)
-    
-    for i in range(actuators_number):
-        
-        H[i, :] = transfer_funct(num1, num2, num3, num4[i, :], den1, den2, den3, den4[i, :], Z,
-                                transfer_function_type)
-            
-    return H
-    
 
 # Funtion to compute the output PSD by multiplying the squared modulus of the transfert function with the
 # input PSD.
@@ -738,20 +752,6 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     print("Measure_CL:", variance_meas_CL)  
     
     return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
-    
-
-# Function to compute the transfer function H; it internally computes n4 and d4 
-# (numerator and denominator of function C) and then builds H using these polynomials.
-
-def build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
-                            den2, den3, transfer_function_type):   
-    
-    num4, den4, Z = compute_n4_d4(gain, omega_temp_freq_interval, t_0, actuators_number)
-
-    transfer_function = compute_H (actuators_number, omega_temp_freq_interval, num1, num2, num3, num4, den1, 
-                                den2, den3, den4, Z, transfer_function_type)
-       
-    return transfer_function
  
 
 # Function to interpolate a 1D vector to a new set of points, setting values outside the original range to 0.
