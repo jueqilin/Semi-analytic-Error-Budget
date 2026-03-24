@@ -32,6 +32,7 @@ from src.Functions import radial_order_from_n_modes
 from src.Functions import temporal_variance
 from src.Functions import total_variance
 from src.Functions import turbulence_psd
+from src.Functions import vibration_variance
 from src.plots import summary_display
 
 
@@ -236,46 +237,55 @@ def run(yaml_file):
 
     var_fit = fitting_variance(fitting_coeff, n_actuators, telescope_diameter, fried_param)
 
-    PSD_wind_vib_to_display = None
+    PSD_wind_for_calc = PSD_wind_vib
 
-    if np.array_equal(temporal_freqs, freq):
-        _, var_temp_CL, PSD_out_temp, _ = temporal_variance(PSD_atmosf, PSD_wind_vib, H_r_temp, 
-                                                            n_actuators, omega_temporal_freqs)
-        PSD_wind_vib_to_display = PSD_wind_vib
-    else:
-        PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(temporal_freqs, freq,
-                                                                 PSD_wind_vib, n_actuators)
-        _, var_temp_CL, PSD_out_temp, _ = temporal_variance(PSD_atmosf, PSD_wind_vib_interp_norm,
-                                                            H_r_temp, n_actuators, omega_temporal_freqs)
-        PSD_wind_vib_to_display = PSD_wind_vib_interp_norm
+    if not np.array_equal(temporal_freqs, freq):
+        PSD_wind_for_calc = interpolate_and_normalize_psd(temporal_freqs, freq,
+                                                          PSD_wind_vib, n_actuators)
 
-    _, var_alias_CL, PSD_out_alias, _ = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
-                                                          alpha_, telescope_diameter, seeing_,
-                                                          modulation_radius, wind_speed,
-                                                          maximum_rad_order_corr, file_path_R1, c_optg,
-                                                          file_sigma_slope)
+    PSD_vibr_zero = np.zeros_like(PSD_wind_for_calc)
 
-    _, var_meas_CL, PSD_out_meas, _ = measure_variance(F_excess_noise, x_pixel, sky_background,
-                                                       dark_current, readout_noise, phot_flux,
-                                                       telescope_diameter, frame_rate, magnitudo,
-                                                       n_subapert, collecting_area, file_path_R1,
-                                                       omega_temporal_freqs, H_n_meas, n_actuators)
+    _, var_temp_atmo_CL, PSD_out_temp_atmo, PSD_in_temp_atmo = temporal_variance(
+        PSD_atmosf,
+        PSD_vibr_zero,
+        H_r_temp,
+        n_actuators,
+        omega_temporal_freqs,
+    )
 
-    total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL)
+    _, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance(PSD_wind_for_calc, H_r_temp,
+                                                                    n_actuators, omega_temporal_freqs)
+
+    _, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
+                                                                     alpha_, telescope_diameter, seeing_,
+                                                                     modulation_radius, wind_speed,
+                                                                     maximum_rad_order_corr, file_path_R1, c_optg,
+                                                                     file_sigma_slope)
+
+    _, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(F_excess_noise, x_pixel, sky_background,
+                                                                 dark_current, readout_noise, phot_flux,
+                                                                 telescope_diameter, frame_rate, magnitudo,
+                                                                 n_subapert, collecting_area, file_path_R1,
+                                                                 omega_temporal_freqs, H_n_meas, n_actuators)
+
+    total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
 
     if not display:
         return
 
-    var_temp_modes = _integrate_modal_psd(PSD_out_temp, omega_temporal_freqs)
+    var_temp_modes = _integrate_modal_psd(PSD_out_temp_atmo, omega_temporal_freqs)
+    var_vibr_modes = _integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
     var_alias_modes = _integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
     var_meas_modes = _integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
     n_modes_display = var_temp_modes.size
     var_fit_modes = np.full(n_modes_display, np.real(var_fit) / n_modes_display)
 
     summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_modes,
-                    PSD_out_temp, PSD_out_alias, PSD_out_meas,
+                    PSD_out_temp_atmo, PSD_out_alias, PSD_out_meas,
                     omega_temporal_freqs, H_r_temp, H_n_meas,
-                    PSD_input_atmos=PSD_atmosf, PSD_input_wind=PSD_wind_vib_to_display,
+                    PSD_input_atmos=PSD_in_temp_atmo, PSD_input_wind=PSD_in_vibr,
+                    PSD_input_alias=PSD_in_alias, PSD_input_meas=PSD_in_meas,
+                    var_vibr_modes=var_vibr_modes, PSD_out_vibr=PSD_out_vibr,
                     modes_to_plot=summary_modes_to_plot)
 
 

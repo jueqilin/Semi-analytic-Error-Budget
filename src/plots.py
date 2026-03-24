@@ -125,6 +125,7 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
     plt.plot(gain_value, variance_total, marker='o')    
     plt.xlabel('Gain')
     plt.ylabel('Total variance')
+    plt.yscale('log')
     plt.title('Total variance as a function of the gain')
     plt.grid()
     plt.show()
@@ -164,11 +165,14 @@ def plot(f, H_r_t, H_n_m, H_n_a, PSD_in_t, PSD_out_t, PSD_in_m, PSD_out_m, PSD_i
 # Function to plot the three output PSDs (temporal, measurement and aliasing)
 # for mode 0 on the same graph.
        
-def plot_all_PSD(f, PSD_out_t, PSD_out_m, PSD_out_a):
+def plot_all_PSD(f, PSD_out_t, PSD_out_m, PSD_out_a, PSD_out_v=None):
 
     PSD_out = [PSD_out_t, PSD_out_m, PSD_out_a]
-
     labels = ["temp", "meas", "alias"]
+
+    if PSD_out_v is not None:
+        PSD_out.append(PSD_out_v)
+        labels.append("vibr")
 
     for i in range(len(PSD_out)):
 
@@ -190,7 +194,8 @@ def plot_all_PSD(f, PSD_out_t, PSD_out_m, PSD_out_a):
 def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_modes,
                     PSD_out_temp, PSD_out_alias, PSD_out_meas, frequencies,
                     H_r_temp, H_n_meas, PSD_input_atmos=None, PSD_input_wind=None,
-                    modes_to_plot=None):
+                    PSD_input_alias=None, PSD_input_meas=None,
+                    modes_to_plot=None, var_vibr_modes=None, PSD_out_vibr=None):
 
     frequencies = np.asarray(frequencies, dtype=float).ravel()
     n_frequencies = frequencies.size
@@ -221,6 +226,9 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     H_r_temp = _as_mode_frequency_matrix(H_r_temp, "H_r_temp")
     H_n_meas = _as_mode_frequency_matrix(H_n_meas, "H_n_meas")
 
+    if PSD_out_vibr is not None:
+        PSD_out_vibr = _as_mode_frequency_matrix(PSD_out_vibr, "PSD_out_vibr")
+
     PSD_out_temp = np.real_if_close(PSD_out_temp, tol=1000)
     PSD_out_alias = np.real_if_close(PSD_out_alias, tol=1000)
     PSD_out_meas = np.real_if_close(PSD_out_meas, tol=1000)
@@ -231,6 +239,10 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
         PSD_out_alias = np.real(PSD_out_alias)
     if np.iscomplexobj(PSD_out_meas):
         PSD_out_meas = np.real(PSD_out_meas)
+    if PSD_out_vibr is not None:
+        PSD_out_vibr = np.real_if_close(PSD_out_vibr, tol=1000)
+        if np.iscomplexobj(PSD_out_vibr):
+            PSD_out_vibr = np.real(PSD_out_vibr)
 
     n_modes = PSD_out_temp.shape[0]
 
@@ -260,6 +272,9 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     var_alias_modes = _as_mode_vector(var_alias_modes, "var_alias_modes")
     var_meas_modes = _as_mode_vector(var_meas_modes, "var_meas_modes")
 
+    if var_vibr_modes is not None:
+        var_vibr_modes = _as_mode_vector(var_vibr_modes, "var_vibr_modes")
+
     vectors = [var_fit_modes, var_temp_modes, var_alias_modes, var_meas_modes]
 
     for vec in vectors:
@@ -270,43 +285,77 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
 
     arrays_2d = [PSD_out_temp, PSD_out_alias, PSD_out_meas, H_r_temp, H_n_meas]
 
+    if PSD_out_vibr is not None:
+        arrays_2d.append(PSD_out_vibr)
+
     for arr in arrays_2d:
         if arr.shape != expected_shape:
             raise ValueError("PSD and transfer-function arrays must have shape (N_modes, N_frequencies)")
 
     H_n_alias = H_n_meas
 
-    PSD_input_atmos_proc = None
-    PSD_input_wind_proc = None
+    def _process_optional_input_psd(array_in, array_name):
+        if array_in is None:
+            return None
 
-    if PSD_input_atmos is not None:
         try:
-            PSD_input_atmos_proc = np.asarray(PSD_input_atmos, dtype=float)
-            PSD_input_atmos_proc = _as_mode_frequency_matrix(PSD_input_atmos_proc, "PSD_input_atmos")
-            PSD_input_atmos_proc = align_psd_modes(PSD_input_atmos_proc, n_modes)
-            PSD_input_atmos_proc = np.real_if_close(PSD_input_atmos_proc, tol=1000)
-            if np.iscomplexobj(PSD_input_atmos_proc):
-                PSD_input_atmos_proc = np.real(PSD_input_atmos_proc)
-        except Exception:
-            PSD_input_atmos_proc = None
+            array_out = np.asarray(array_in, dtype=float)
+            array_out = _as_mode_frequency_matrix(array_out, array_name)
+            array_out = align_psd_modes(array_out, n_modes)
+            array_out = np.real_if_close(array_out, tol=1000)
+            if np.iscomplexobj(array_out):
+                array_out = np.real(array_out)
+            return array_out
+        except (TypeError, ValueError):
+            return None
 
-    if PSD_input_wind is not None:
-        try:
-            PSD_input_wind_proc = np.asarray(PSD_input_wind, dtype=float)
-            PSD_input_wind_proc = _as_mode_frequency_matrix(PSD_input_wind_proc, "PSD_input_wind")
-            PSD_input_wind_proc = align_psd_modes(PSD_input_wind_proc, n_modes)
-            PSD_input_wind_proc = np.real_if_close(PSD_input_wind_proc, tol=1000)
-            if np.iscomplexobj(PSD_input_wind_proc):
-                PSD_input_wind_proc = np.real(PSD_input_wind_proc)
-        except Exception:
-            PSD_input_wind_proc = None
+    PSD_input_atmos_proc = _process_optional_input_psd(PSD_input_atmos, "PSD_input_atmos")
+    PSD_input_wind_proc = _process_optional_input_psd(PSD_input_wind, "PSD_input_wind")
+    PSD_input_alias_proc = _process_optional_input_psd(PSD_input_alias, "PSD_input_alias")
+    PSD_input_meas_proc = _process_optional_input_psd(PSD_input_meas, "PSD_input_meas")
+
+    PSD_cl_total = PSD_out_temp + PSD_out_alias + PSD_out_meas
+    if PSD_out_vibr is not None:
+        PSD_cl_total = PSD_cl_total + PSD_out_vibr
+    PSD_cl_total_all_modes = np.sum(PSD_cl_total, axis=0)
+
+    if any(psd is not None for psd in (
+        PSD_input_atmos_proc,
+        PSD_input_wind_proc,
+        PSD_input_alias_proc,
+        PSD_input_meas_proc,
+    )):
+        input_PSD_available = True
+        PSD_input_total = np.zeros_like(PSD_cl_total)
+        if PSD_input_atmos_proc is not None:
+            PSD_input_total += PSD_input_atmos_proc
+        if PSD_input_wind_proc is not None:
+            PSD_input_total += PSD_input_wind_proc
+        if PSD_input_alias_proc is not None:
+            PSD_input_total += PSD_input_alias_proc
+        if PSD_input_meas_proc is not None:
+            PSD_input_total += PSD_input_meas_proc
+        PSD_input_total_all_modes = np.zeros(frequencies.size)
+        if PSD_input_atmos_proc is not None:
+            PSD_input_total_all_modes += np.sum(PSD_input_atmos_proc, axis=0)
+        if PSD_input_wind_proc is not None:
+            PSD_input_total_all_modes += np.sum(PSD_input_wind_proc, axis=0)
+        if PSD_input_alias_proc is not None:
+            PSD_input_total_all_modes += np.sum(PSD_input_alias_proc, axis=0)
+        if PSD_input_meas_proc is not None:
+            PSD_input_total_all_modes += np.sum(PSD_input_meas_proc, axis=0)
+    else:
+        input_PSD_available = False
 
     var_total_modes = var_fit_modes + var_temp_modes + var_alias_modes + var_meas_modes
+    if var_vibr_modes is not None:
+        var_total_modes = var_total_modes + var_vibr_modes
 
     fit_total = np.sum(var_fit_modes)
     temp_total = np.sum(var_temp_modes)
     alias_total = np.sum(var_alias_modes)
     meas_total = np.sum(var_meas_modes)
+    vibr_total = np.sum(var_vibr_modes) if var_vibr_modes is not None else None
     total_variance_sum = np.sum(var_total_modes)
 
     print("\n===== CLOSED-LOOP SUMMARY =====")
@@ -316,6 +365,8 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     print(f"Temporal total variance [nm^2]:     {temp_total:.6e}")
     print(f"Aliasing total variance [nm^2]:     {alias_total:.6e}")
     print(f"Measurement total variance [nm^2]:  {meas_total:.6e}")
+    if vibr_total is not None:
+        print(f"Vibration total variance [nm^2]:   {vibr_total:.6e} (separate term)")
     print(f"Total output variance [nm^2]:       {total_variance_sum:.6e}")
 
     if modes_to_plot is None:
@@ -330,12 +381,15 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
 
     mode_axis = np.arange(n_modes)+1
 
+    # 1. Variance vs mode
     plt.figure()
     plt.plot(mode_axis, var_total_modes, label="total")
     plt.plot(mode_axis, var_fit_modes, label="fitting")
     plt.plot(mode_axis, var_temp_modes, label="temporal")
     plt.plot(mode_axis, var_alias_modes, label="aliasing")
     plt.plot(mode_axis, var_meas_modes, label="measurement")
+    if var_vibr_modes is not None:
+        plt.plot(mode_axis, var_vibr_modes, '--', label="vibration")
     plt.xscale("log")
     plt.yscale("log")
     plt.xlabel("Mode index")
@@ -343,29 +397,55 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     plt.title("Variance vs mode")
     plt.grid()
     plt.legend()
-    plt.show()
 
-    PSD_cl_total = PSD_out_temp + PSD_out_alias + PSD_out_meas
-    PSD_cl_total_all_modes = np.sum(PSD_cl_total, axis=0)
-
+    # 2. Total CL and OL PSD
     plt.figure()
-    plt.loglog(frequencies, PSD_cl_total_all_modes)
+    plt.loglog(frequencies, PSD_cl_total_all_modes, label="Closed-loop total PSD")
+    if input_PSD_available:
+        plt.loglog(frequencies, PSD_input_total_all_modes, 'k--', linewidth=2, label="Total input PSD")
     plt.xlabel("Frequency [rad/s]")
     plt.ylabel("PSD [nm^2/Hz]")
     plt.title("Closed-loop total PSD")
+    plt.legend()
     plt.grid()
-    plt.show()
 
+    # 3. CL and OL PSD for selected modes
     plt.figure()
     for mode in mode_indices:
         plt.loglog(frequencies, PSD_cl_total[mode, :], label=f"mode {mode}")
+        if input_PSD_available:
+            plt.loglog(frequencies, PSD_input_total[mode, :], '--', label=f"input mode {mode}")
     plt.xlabel("Frequency [rad/s]")
     plt.ylabel("PSD [nm^2/Hz]")
     plt.title("Closed-loop PSD for selected modes")
     plt.grid()
     plt.legend()
-    plt.show()
 
+    # 4. CL and OL PSD components for selected modes
+    # one figure per mode, with temp, alias, meas, vibr (if available) in different colors and line styles
+    for mode in mode_indices:
+        plt.figure()
+        plt.loglog(frequencies, PSD_out_temp[mode, :], 'k', label=f"temp mode {mode}")
+        plt.loglog(frequencies, PSD_out_alias[mode, :], 'b', label=f"alias mode {mode}")
+        plt.loglog(frequencies, PSD_out_meas[mode, :], 'g', label=f"meas mode {mode}")
+        if var_vibr_modes is not None and PSD_out_vibr is not None:
+            plt.loglog(frequencies, PSD_out_vibr[mode, :], 'r', label=f"vibr mode {mode}")
+        if input_PSD_available:
+            if PSD_input_atmos_proc is not None:
+                plt.loglog(frequencies, PSD_input_atmos_proc[mode, :], 'k--', label=f"atmos input mode {mode}")
+            if PSD_input_wind_proc is not None:
+                plt.loglog(frequencies, PSD_input_wind_proc[mode, :], 'r--', label=f"wind input mode {mode}")
+            if PSD_input_alias_proc is not None:
+                plt.loglog(frequencies, PSD_input_alias_proc[mode, :], 'b--', label=f"alias input mode {mode}")
+            if PSD_input_meas_proc is not None:
+                plt.loglog(frequencies, PSD_input_meas_proc[mode, :], 'g--', label=f"meas input mode {mode}")
+        plt.xlabel("Frequency [rad/s]")
+        plt.ylabel("PSD [nm^2/Hz]")
+        plt.title("Closed-loop PSD components for selected modes")
+        plt.grid()
+        plt.legend()
+
+    # 5. Transfer functions for selected modes
     plt.figure()
     for mode in mode_indices:
         plt.loglog(frequencies, np.abs(H_r_temp[mode, :])**2, label=f"|H_r|² mode {mode}")
@@ -375,41 +455,8 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     plt.title("Transfer functions for selected modes")
     plt.grid()
     plt.legend()
+
     plt.show()
-
-    if PSD_input_atmos_proc is not None or PSD_input_wind_proc is not None:
-        PSD_input_total_all_modes = np.zeros(frequencies.size)
-        if PSD_input_atmos_proc is not None:
-            PSD_input_total_all_modes += np.sum(PSD_input_atmos_proc, axis=0)
-        if PSD_input_wind_proc is not None:
-            PSD_input_total_all_modes += np.sum(PSD_input_wind_proc, axis=0)
-
-        plt.figure()
-        if PSD_input_atmos_proc is not None:
-            plt.loglog(frequencies, np.sum(PSD_input_atmos_proc, axis=0), label="Atmospheric")
-        if PSD_input_wind_proc is not None:
-            plt.loglog(frequencies, np.sum(PSD_input_wind_proc, axis=0), label="Windshake")
-        plt.loglog(frequencies, PSD_input_total_all_modes, 'k--', linewidth=2, label="Total input")
-        plt.xlabel("Frequency [rad/s]")
-        plt.ylabel("PSD [nm^2/Hz]")
-        plt.title("Input PSD (all modes)")
-        plt.grid()
-        plt.legend()
-        plt.show()
-
-        plt.figure()
-        if PSD_input_atmos_proc is not None:
-            for mode in mode_indices:
-                plt.loglog(frequencies, PSD_input_atmos_proc[mode, :], label=f"Atmos mode {mode}")
-        if PSD_input_wind_proc is not None:
-            for mode in mode_indices:
-                plt.loglog(frequencies, PSD_input_wind_proc[mode, :], '--', label=f"Wind mode {mode}")
-        plt.xlabel("Frequency [rad/s]")
-        plt.ylabel("PSD [nm^2/Hz]")
-        plt.title("Input PSD (selected modes)")
-        plt.grid()
-        plt.legend()
-        plt.show()
 
     return {
         "var_total_modes": var_total_modes,
@@ -418,6 +465,7 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
             "temp": temp_total,
             "alias": alias_total,
             "meas": meas_total,
+            "vibr": vibr_total,
             "total": total_variance_sum
         },
         "modes_plotted": mode_indices,
