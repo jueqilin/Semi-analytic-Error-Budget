@@ -18,7 +18,7 @@ from src.Functions import total_variance
 from src.Functions import compute_andes_optical_gain
 #from src.Functions import compute_soul_optical_gain
 from src.Functions import extract_propagation_coefficients
-from src.Functions import PSD_aliasing
+from src.Functions import PSD_final_alias_meas
 from src.Functions import double_interpolation_sigma_slope
 from src.Functions import read_sigma_slopes
 
@@ -78,16 +78,18 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
         
         
         _, variance_aliasing, _, _ = aliasing_variance(H_n_alias, number_of_actuators, omega_temp_freq_interval, 
-                                                    alpha, telescope_diameter, seeing, modulation_radius, wind_speed,
-                                                    maximum_radial_order_corrected, reconstruction_matrix_path, gain_val,
-                                                    sigma_slopes_path)
-        
+                                                       gain_val, alpha, telescope_diameter, seeing, modulation_radius,
+                                                       wind_speed, maximum_radial_order_corrected, 
+                                                       reconstruction_matrix_path, sigma_slopes_path)
+
         
         _, variance_measurement, _, _ = measure_variance(excess_noise_factor, slope_computer_weights, sky_background, 
                                                          dark_current, readout_noise,photon_flux, telescope_diameter,
                                                          frame_rate, magnitude, n_subaperture,collecting_area, 
                                                          reconstruction_matrix_path,omega_temp_freq_interval, H_n_meas, 
-                                                         number_of_actuators)
+                                                         number_of_actuators, gain_val, alpha, maximum_radial_order_corrected,
+                                                         seeing, modulation_radius, wind_speed, file_path_sigma_slopes=None)
+        
         
         print ("CLOSED LOOP:")
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
@@ -480,13 +482,13 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
 # The function also print the variance of the first mode alone in both cases.
     
 def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_radius,
-                    actuators_number, alpha, omega_temp_freq_interval, wind_speed,
-                    maximum_radial_order_corrected, optical_gain_models, sigma_slopes_path,
+          actuators_number, alpha, omega_temp_freq_interval, wind_speed,
+          maximum_radial_order_corrected, optical_gain_models, sigma_slopes_path,
           system="ANDES"):
 
     if system == "ANDES":
                 c_optg = compute_andes_optical_gain(optical_gain_models[0], optical_gain_models[1],
-                                                                                        seeing, modulation_radius)
+                                                    seeing, modulation_radius)
     # TODO not supported yet
     #elif system == "SOUL":
     #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
@@ -519,11 +521,10 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
         
     print("ALIASING VARIANCE (OPEN LOOP):", sigma_alias_2_two_modes)
     
-    PSD_al = PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha, 
-                           telescope_diameter, seeing, modulation_radius, wind_speed,
-                           maximum_radial_order_corrected,
-                           reconstruction_matrix_path, c_optg, sigma_slopes_path)
-    
+    PSD_al = PSD_final_alias_meas (c_optg, None, actuators_number, omega_temp_freq_interval, alpha,  
+                                   telescope_diameter, seeing, modulation_radius, wind_speed,
+                                   maximum_radial_order_corrected, "alias", reconstruction_matrix_path,
+                                   file_path_sigma_slopes=None)
     
     integral_per_mode = integrate.simpson(PSD_al, omega_temp_freq_interval)
     sigma_alias_2_PSD_total = np.sum(integral_per_mode)
@@ -557,10 +558,11 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
         #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
         PSD_aliasing_mode0_given = mode_0 / (c_optg ** 2 * 2 * np.pi)             
         
-    PSD_alising_mine = PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,  
-                                     telescope_diameter, seeing, modulation_radius, wind_speed,
-                                     maximum_radial_order_corrected, reconstruction_matrix_path, c_optg,
-                                     sigma_slopes_path)
+    PSD_alising_mine = PSD_final_alias_meas (c_optg, None, actuators_number, omega_temp_freq_interval, alpha,  
+                                             telescope_diameter, seeing, modulation_radius, wind_speed,
+                                             maximum_radial_order_corrected, "alias", reconstruction_matrix_path,
+                                             sigma_slopes_path)
+    
     
     PSD_alising_mine_mode0 = PSD_alising_mine[0,:]
     
@@ -617,15 +619,21 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
         
         
     
-    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, 
+    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, c_optg,
                                                                  alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                                                                 maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
+                                                                 maximum_radial_order_corrected, file_path_matrix_R, 
                                                                  file_path_sigma_slopes)  
+    
+    
+
     
     _, _, PSD_output_meas, PSD_input_meas = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                                                               photon_flux, telescope_diameter,frame_rate, magnitudo, 
                                                               n_subaperture, collecting_area, file_path_matrix_R, 
-                                                              omega_temp_freq_interval, H_n, actuators_number)
+                                                              omega_temp_freq_interval, H_n, actuators_number, 
+                                                              c_optg, alpha, maximum_radial_order_corrected,
+                                                              seeing, modulation_radius, windspeed, 
+                                                              file_path_sigma_slopes=None)
     
     
     PSD_total_input_mode0 = PSD_input_temp[0] + PSD_input_alias[0] + PSD_input_meas[0]

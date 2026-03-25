@@ -128,7 +128,6 @@ x_pixel = param['control']['slope_computer_weights']
 system = param['system']['name']
 
 
-
 display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1)
@@ -199,18 +198,24 @@ else:
 # ALIASING  ---->  Variance OL, Variance CL, PSD CL, PSD OL
 #################
 
-var_alias_OL, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs, 
-                                                                            alpha_, telescope_diameter, seeing, modulation_radius,
-                                                                            wind_speed,maximum_radial_order, file_path_R1, c_optg, 
+var_alias_OL, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
+                                                                            c_optg, alpha_, telescope_diameter, seeing, modulation_radius,
+                                                                            wind_speed, maximum_radial_order, file_path_R1,  
                                                                             file_sigma_slope)
+
 #################
 # MEAS  ---->  Variance OL, Variance CL, PSD CL, PSD OL
 #################
 
+
 var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas  = measure_variance (F_excess_noise, x_pixel, sky_background, dark_current, 
                                                                          readout_noise, phot_flux, telescope_diameter, frame_rate, 
                                                                          magnitude, n_subapert, collecting_area, file_path_R1, 
-                                                                         omega_temporal_freqs, H_n_meas, n_actuators)
+                                                                         omega_temporal_freqs, H_n_meas, n_actuators, 
+                                                                         c_optg, alpha_, maximum_radial_order,
+                                                                         seeing, modulation_radius, wind_speed, 
+                                                                         file_path_sigma_slopes=None)
+
 print ("OPEN LOOP:")
 var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL)
 print ("CLOSED LOOP:")

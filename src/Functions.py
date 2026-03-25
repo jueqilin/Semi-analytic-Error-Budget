@@ -538,7 +538,7 @@ def omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected):
 # Function to compute the preliminary aliasing coefficient k' based on sigma slope, 
 # temporal frequency interval and system parameters. 
 
-def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, c, telescope_diameter, 
+def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescope_diameter, 
                     windspeed, maximum_radial_order_corrected):
     
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
@@ -547,7 +547,7 @@ def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, c, teles
     omega_max = np.max(omega_temp_freq_interval) 
     integral_result = w_0 ** alpha * (w_0 - omega_min) + (omega_max ** (alpha + 1)
                                                                   - w_0 ** (alpha + 1)) / (alpha + 1)
-    k_prime = (sigma_slope_alias ** 2) / ((c ** 2) * integral_result)    
+    k_prime = (sigma_slope_alias ** 2) / integral_result  
     
     return k_prime
     
@@ -557,7 +557,7 @@ def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, c, teles
 # It uses sigma slope data from FITS files and applies 2D interpolation over 
 # modulation radius and seeing.
 
-def k_coeff_aliasing(modulation_radius, seeing, c, alpha, telescope_diameter, 
+def k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter, 
                      omega_temp_freq_interval, file_path_matrix_R, windspeed,
                      maximum_radial_order_corrected, file_path_sigma_slopes=None):
     
@@ -569,7 +569,7 @@ def k_coeff_aliasing(modulation_radius, seeing, c, alpha, telescope_diameter,
     sigma_slope_alias = double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
                                                          modulation_radius, seeing)
     
-    k_pr = compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, c, telescope_diameter, 
+    k_pr = compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescope_diameter, 
                            windspeed, maximum_radial_order_corrected)
     
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
@@ -585,9 +585,9 @@ def k_coeff_aliasing(modulation_radius, seeing, c, alpha, telescope_diameter,
     return k_coeff
 
 
-# Function to compute the aliasing PSD matrix from the modal coefficients k and the optical gain.
+# Function to compute the aliasing PSD matrix from the modal coefficients k.
 
-def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, c, k, 
+def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k, 
                              alpha, telescope_diameter, windspeed, maximum_radial_order_corrected):
     
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
@@ -611,24 +611,52 @@ def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, c, k,
     return PSDaliasing  
     
 
-# Function to compute the optical gain c, the modal aliasing coefficients k 
-# and, then, to build the corresponding aliasing PSD matrix.
+# Function to compute the modal aliasing coefficients k and, then, to build the 
+# corresponding intermediate aliasing PSD.                   
 
-def PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,  
-                  telescope_diameter, seeing, modulation_radius, windspeed,
-                  maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
-                  file_path_sigma_slopes=None):
+def PSD_aliasing_intermediate (actuators_number, omega_temp_freq_interval, alpha,  
+                               telescope_diameter, seeing, modulation_radius, windspeed,
+                               maximum_radial_order_corrected, file_path_matrix_R,
+                               file_path_sigma_slopes=None):
     
-    k = k_coeff_aliasing(modulation_radius, seeing, c_optg, alpha, telescope_diameter,
+    k = k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
                          omega_temp_freq_interval, file_path_matrix_R, windspeed,
                          maximum_radial_order_corrected, file_path_sigma_slopes)
     
-    PSD_alias = aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, 
-                                         c_optg, k, alpha, telescope_diameter, 
-                                         windspeed, maximum_radial_order_corrected)
+    PSD_alias_intermed = aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, 
+                                                  k, alpha, telescope_diameter, windspeed, 
+                                                  maximum_radial_order_corrected)
 
-    return PSD_alias  
+    return PSD_alias_intermed 
+
+
+# Computes the final PSD (aliasing or measurement) by scaling the corresponding
+# intermediate PSD with the optical gain factor (1/c_optg^2).
+
+def PSD_final_alias_meas (c_optg, sigma2_w, actuators_number, omega_temp_freq_interval, alpha,  
+                          telescope_diameter, seeing, modulation_radius, windspeed,
+                          maximum_radial_order_corrected, term, file_path_matrix_R,
+                          file_path_sigma_slopes=None):
     
+    if term == "alias" and sigma2_w is None:
+    
+       PSD_intermed = PSD_aliasing_intermediate (actuators_number, omega_temp_freq_interval, alpha,  
+                                                       telescope_diameter, seeing, modulation_radius, windspeed,
+                                                       maximum_radial_order_corrected, file_path_matrix_R,
+                                                       file_path_sigma_slopes)
+       
+    elif term == "meas" and sigma2_w is not None:
+       
+       PSD_intermed = compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, sigma2_w)
+    
+    else:
+        
+       raise ValueError("Invalid combination of 'term' and sigma2_w.")
+       
+    PSD_final = PSD_intermed / (c_optg**2)
+    
+    return PSD_final
+  
 
 # Computes the aliasing variance by applying the transfer function to the aliasing PSD 
 # and integrating the output over the specified frequency interval.
@@ -636,14 +664,14 @@ def PSD_aliasing (actuators_number, omega_temp_freq_interval, alpha,
 # with pyramid wavefront sensors", Agapito and Pinna, 2019).  
 
 def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval, 
-                       alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                       maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
-                       file_path_sigma_slopes):
+                       c_optg, alpha, telescope_diameter, seeing, modulation_radius, 
+                       windspeed, maximum_radial_order_corrected, file_path_matrix_R,
+                       file_path_sigma_slopes=None):
     
-    PSD_input = PSD_aliasing(actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
-                             seeing, modulation_radius, windspeed, maximum_radial_order_corrected,
-                             file_path_matrix_R, c_optg, file_path_sigma_slopes)
-    
+    PSD_input = PSD_final_alias_meas (c_optg, None, actuators_number, omega_temp_freq_interval, alpha,  
+                                      telescope_diameter, seeing, modulation_radius, windspeed,
+                                      maximum_radial_order_corrected, "alias", file_path_matrix_R,
+                                      file_path_sigma_slopes)
     
     variance_alias_OL, variance_alias_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                         PSD_input, omega_temp_freq_interval)
@@ -700,18 +728,18 @@ def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_o
 # PSD over the entire frequency range, as stated in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna (2019).
 
-def compute_noise_PSD(p_coefficient, omega_temp_freq_interval, actuators_number, sigma2_w):
+def compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, sigma2_w):
     
-    PSD_w = np.zeros((actuators_number, len(omega_temp_freq_interval)))
+    PSD_w_intermed = np.zeros((actuators_number, len(omega_temp_freq_interval)))
   
     omega_interval_min = np.min(omega_temp_freq_interval)                 
     omega_interval_max = np.max(omega_temp_freq_interval)
    
     for i in range(actuators_number):
 
-        PSD_w[i, :] = sigma2_w[i] /(omega_interval_max -  omega_interval_min) 
+        PSD_w_intermed[i, :] = sigma2_w[i] /(omega_interval_max -  omega_interval_min) 
 
-    return PSD_w 
+    return PSD_w_intermed
 
 
 # Calculates the slope noise variance, extracts the propagation coefficients from the FITS
@@ -723,7 +751,8 @@ def compute_noise_PSD(p_coefficient, omega_temp_freq_interval, actuators_number,
 def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                       photon_flux, telescope_diameter,frame_rate, magnitudo, n_subaperture, 
                       collecting_area, file_path_matrix_R, omega_temp_freq_interval, 
-                      transf_funct, actuators_number):
+                      transf_funct, actuators_number, c_optg, alpha, maximum_radial_order_corrected,
+                      seeing, modulation_radius, windspeed, file_path_sigma_slopes=None):
     
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
@@ -744,7 +773,11 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     p_coefficient = p_coefficient[:actuators_number]
     sigma2_w = p_coefficient * slope_noise_variance
     
-    PSD_input =  compute_noise_PSD (p_coefficient, omega_temp_freq_interval, actuators_number, sigma2_w)
+    
+    PSD_input = PSD_final_alias_meas (c_optg, sigma2_w, actuators_number, omega_temp_freq_interval, alpha,  
+                                      telescope_diameter, seeing, modulation_radius, windspeed,
+                                      maximum_radial_order_corrected, "meas", file_path_matrix_R,
+                                      file_path_sigma_slopes)
     
     variance_meas_OL, variance_meas_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                       PSD_input, omega_temp_freq_interval)
@@ -813,16 +846,21 @@ def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, a
         
         
     
-    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, 
+    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, c_optg,
                                                                  alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                                                                 maximum_radial_order_corrected, file_path_matrix_R, c_optg, 
+                                                                 maximum_radial_order_corrected, file_path_matrix_R,  
                                                                  file_path_sigma_slopes)  
+
     
     _, _, PSD_output_meas, PSD_input_meas = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                                                               photon_flux, telescope_diameter,frame_rate, magnitudo, 
                                                               n_subaperture, collecting_area, file_path_matrix_R, 
-                                                              omega_temp_freq_interval, H_n, actuators_number)
+                                                              omega_temp_freq_interval, H_n, actuators_number,
+                                                              c_optg, alpha, maximum_radial_order_corrected,
+                                                              seeing, modulation_radius, windspeed, 
+                                                              file_path_sigma_slopes)
     
+   
     return PSD_output_temp, PSD_input_temp, PSD_output_alias, PSD_input_alias, PSD_output_meas, PSD_input_meas
 
 
@@ -868,6 +906,7 @@ def total_variance(fit_err, temp_err, alias_err, meas_err):
 
 
          
+
 
 
 
