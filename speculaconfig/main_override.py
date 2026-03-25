@@ -5,9 +5,8 @@ specula.init(0)
 import numpy as np
 from astropy.io import fits
 
-from specula.mmlib.yaml_overrides import write_yaml_overrides
-from specula.mmlib.utils import get_pupil_mask, read_freq, get_psd
-from specula.mmlib.compute_rec import compute_and_save_rec
+from speculaconfig.yaml_overrides import write_yaml_overrides
+from speculaconfig.utils import get_pupil_mask, read_freq, get_psd, compute_and_save_rec
 
 
 rMods = np.array([0,1,2,3,4]) #([2,3,4,5,6])

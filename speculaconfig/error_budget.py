@@ -5,7 +5,7 @@ import os.path as op
 from astropy.io import fits
 
 from scipy.integrate import simpson
-from specula.mmlib.utils import radial_order, von_karman_power, get_pupil_mask
+from speculaconfig.utils import radial_order, von_karman_power, get_pupil_mask
 from specula.data_objects.iir_filter_data import IirFilterData
 
 class AOErrorBudgetMachine:
