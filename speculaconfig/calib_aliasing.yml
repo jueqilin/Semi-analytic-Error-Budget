@@ -39,8 +39,7 @@ ocam_override:
 
 # Data store for results
 data_store_override:
-  class:             'DataStore'
-  store_dir:         '/raid1/mmenessini/calibration/SOUL/scratch_aliasing'             # Data result directory: 'store_dir'/TN/
+  class:             'DataStore'            # Data result directory: 'store_dir'/TN/
   create_tn: false
   inputs:
     input_list: ['pyr_modes-pyr_modalrec.out_modes',]

@@ -9,6 +9,8 @@ from specula.lib.make_mask import make_mask
 from specula.lib.mmse_reconstructor import compute_mmse_reconstructor
 
 
+from .root import im_path, rec_path
+
 def radial_order(i_mode):
     noll = i_mode + 2
     return int(np.ceil(-3.0/2.0+np.sqrt(1+8*noll)/2.0))
@@ -51,18 +53,18 @@ def read_freq(params_path:str, obj_name:str=None):
 
 
 
-def compute_and_save_rec(root_dir:str, im_tag:str, rec_tag:str, Nmodes:int, 
+def compute_and_save_rec(im_tag:str, rec_tag:str, Nmodes:int, 
                 ml:bool=False, slope_null=None, RON:float=0.0, 
                 mmse:bool=False, diam:float=None, overwrite:bool=False):
     print(rec_tag,im_tag)
-    rec = compute_rec(root_dir, im_tag, Nmodes, ml=ml, slope_null=slope_null, RON=RON, mmse=mmse, diam=diam)
-    save_rec(root_dir, rec, rec_tag, overwrite=overwrite)
+    rec = compute_rec(im_tag, Nmodes, ml=ml, slope_null=slope_null, RON=RON, mmse=mmse, diam=diam)
+    save_rec(rec, rec_tag, overwrite=overwrite)
 
 
-def compute_rec(root_dir:str, im_tag:str, Nmodes:int, 
+def compute_rec(im_tag:str, Nmodes:int, 
                 ml:bool=False, slope_null=None, RON:float=0.0, 
                 mmse:bool=False, diam:float=None):    
-    im_hdul = fits.open(os.path.join(root_dir,'im',im_tag+'.fits'))
+    im_hdul = fits.open(os.path.join(im_path,im_tag+'.fits'))
     intmat = im_hdul[1].data.copy()
     D = intmat[:,:Nmodes]
     if ml or mmse:
@@ -81,8 +83,8 @@ def compute_rec(root_dir:str, im_tag:str, Nmodes:int,
     return rec
 
 
-def save_rec(root_dir:str, rec, rec_tag:str, overwrite:bool=False):
-    path = os.path.join(root_dir,'rec')
+def save_rec(rec, rec_tag:str, overwrite:bool=False):
+    path = os.path.join(rec_path)
     if not os.path.exists(path):
         os.mkdir(path)
     filename = os.path.join(path,rec_tag+'.fits')

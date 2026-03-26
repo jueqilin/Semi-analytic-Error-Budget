@@ -2,7 +2,7 @@
 # Main simulation parameters
 main:
   class:             'SimulParams'
-  root_dir:          '/raid1/mmenessini/calibration/SOUL/'       # CalibManager root directory (all the data are in subdirectories)
+  root_dir:          './calib'       # CalibManager root directory (all the data are in subdirectories)
   pixel_pupil:       160                   # Must match influence function computation
   pixel_pitch:       0.0525            # [m] Pitch of the pupil phase array
   total_time:        10.9956                # [s] Total simulation running time
@@ -166,7 +166,7 @@ atmo_modes:
 # Data store for results
 data_store:
   class:             'DataStore'
-  store_dir:         '/raid1/mmenessini/results/SOUL'             # Data result directory: 'store_dir'/TN/
+  store_dir:         './output'             # Data result directory: 'store_dir'/TN/
   inputs:
     input_list: [
                   'sr-psf.out_sr',

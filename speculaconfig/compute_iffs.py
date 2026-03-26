@@ -8,15 +8,15 @@ from specula.lib.modal_base_generator import make_modal_base_from_ifs_fft
 from specula.lib.make_mask import make_mask
 from specula.data_objects.ifunc import IFunc
 from specula.data_objects.ifunc_inv import IFuncInv
-from specula.data_objects.recmat import Recmat
 from specula.data_objects.m2c import M2C
-from specula.calib_manager import CalibManager
 from specula import cpuArray
+
+from .root import iff_path, m2c_path, pupil_path
 
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
-def compute_and_save_influence_functions(root_dir:str, tag:str, pupil_pixels:int, n_acts:int, geom:str='circular',
+def compute_and_save_influence_functions(tag:str, pupil_pixels:int, n_acts:int, geom:str='circular',
                                          r0:float=10e-2, L0:float=25, zern_modes:int=2, D:float=8.2,
                                          obsratio:float=0.14, diaratio:float=1.0, doMechCoupling:bool=False,
                                          couplingCoeffs=[0.31,0.05], pupil_mask_tag=None):
@@ -24,20 +24,15 @@ def compute_and_save_influence_functions(root_dir:str, tag:str, pupil_pixels:int
     Compute zonal influence functions and modal basis for the SCAO tutorial
     Follows the same approach as test_modal_basis.py
     """
-    # create calibration directory if it doesn't exist
-    os.makedirs(root_dir, exist_ok=True)
-
-    # initialize calibration manager
-    calib_manager = CalibManager(root_dir)
 
     # tags
     ifunc_tag = tag+'_ifunc'
     m2c_tag = tag+'_m2c'
     base_inv_tag = tag+'_kl_inv'
 
-    ifunc_filename = calib_manager.filename('ifunc', ifunc_tag)
-    m2c_filename = calib_manager.filename('m2c', m2c_tag)
-    base_inv_filename = calib_manager.filename('ifunc', base_inv_tag)
+    ifunc_filename = os.path.join(iff_path,ifunc_tag)
+    m2c_filename = os.path.join(m2c_path,m2c_tag)
+    base_inv_filename = os.path.join(iff_path,base_inv_tag)
 
     try:
         kl_basis_inv = IFuncInv.restore(base_inv_filename)
@@ -75,7 +70,7 @@ def compute_and_save_influence_functions(root_dir:str, tag:str, pupil_pixels:int
 
 
     if pupil_mask_tag is not None:
-        fname = os.path.join(root_dir,'pupilstop/'+pupil_mask_tag+f'_{Npix:1.0f}pixels.fits')
+        fname = os.path.join(pupil_path, pupil_mask_tag+f'_{Npix:1.0f}pixels.fits')
         hdu = fits.open(fname)
         pupil_mask = hdu[1].data
     else:
@@ -128,10 +123,6 @@ def compute_and_save_influence_functions(root_dir:str, tag:str, pupil_pixels:int
     print(f"Number of KL modes: {kl_basis.shape[0]}")
 
     kl_basis_inv = np.linalg.pinv(kl_basis)
-
-    # Step 3: Create output directory
-    os.makedirs(os.path.join(root_dir, 'ifunc'), exist_ok=True)
-    os.makedirs(os.path.join(root_dir, 'm2c'), exist_ok=True)
 
     # Step 4: Save using SPECULA data objects
     print(f"\nSaving influence functions and modal basis...")
@@ -223,7 +214,6 @@ def compute_and_save_influence_functions(root_dir:str, tag:str, pupil_pixels:int
         print("Matplotlib not available - skipping visualization")
 
     print(f"\nInfluence functions and modal basis computation completed!")
-    print(f"Files saved using CalibManager in: {calib_manager.root_dir}")
     print(f"\nFiles created:")
     print(f"  ifunc/{ifunc_tag}.fits        - Zonal influence functions ({n_valid_actuators} actuators)")
     print(f"  ifunc/{base_inv_tag}.fits     - KL modal basis inverse ({kl_basis.shape[0]} modes)")
@@ -250,7 +240,6 @@ def compute_and_save_influence_functions(root_dir:str, tag:str, pupil_pixels:int
 
 
 if __name__ == "__main__":
-    root_dir = '/raid1/mmenessini/calibration/SOUL'
     Npix = 160
-    compute_and_save_influence_functions(root_dir,tag='asm', pupil_pixels=Npix, n_acts=30,
+    compute_and_save_influence_functions(tag='asm', pupil_pixels=Npix, n_acts=30,
                                           geom='circular', r0=10e-2, obsratio=0.0, D=8.4)
