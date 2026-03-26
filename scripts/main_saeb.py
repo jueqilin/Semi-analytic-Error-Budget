@@ -50,24 +50,12 @@ def _resolve_yaml_path(yaml_file):
 
 def _build_gain_vector(loop_params, n_actuators):
     gain_minimum = loop_params.get('gain_min', None)
-    total_delay = loop_params['total_delay']
     gain_number = loop_params.get('gain_n', None)
     gain_value = loop_params.get('gain_value', None)
     gain_vector = loop_params.get('gain_vector', None)
 
     if gain_value is not None and gain_vector is not None:
         raise ValueError("Cannot set both gain_value and gain_vector")
-
-    g_maximum_mapping = {
-        1: 2.0,
-        2: 1.0,
-        3: 0.6,
-        4: 0.4
-    }
-    # interpolate gain_maximum based on total_delay if it's not directly in the mapping
-    gain_maximum = np.interp(total_delay,
-                             list(g_maximum_mapping.keys()),
-                             list(g_maximum_mapping.values()))
 
     if gain_vector is not None:
         gain_vector = np.asarray(gain_vector, dtype=float).ravel()
@@ -257,16 +245,19 @@ def run(yaml_file):
                                                                     n_actuators, omega_temporal_freqs)
 
     _, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
-                                                                     alpha_, telescope_diameter, seeing_,
+                                                                     c_optg, alpha_, telescope_diameter, seeing_,
                                                                      modulation_radius, wind_speed,
-                                                                     maximum_rad_order_corr, file_path_R1, c_optg,
+                                                                     maximum_rad_order_corr, file_path_R1,
                                                                      file_sigma_slope)
 
     _, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(F_excess_noise, x_pixel, sky_background,
                                                                  dark_current, readout_noise, phot_flux,
                                                                  telescope_diameter, frame_rate, magnitudo,
                                                                  n_subapert, collecting_area, file_path_R1,
-                                                                 omega_temporal_freqs, H_n_meas, n_actuators)
+                                                                 omega_temporal_freqs, H_n_meas, n_actuators,
+                                                                 c_optg, alpha_, maximum_rad_order_corr,
+                                                                 seeing_, modulation_radius, wind_speed,
+                                                                 file_sigma_slope)
 
     total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
 

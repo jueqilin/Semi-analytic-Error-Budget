@@ -113,7 +113,13 @@ else:
 if gain_.size != n_actuators:
     raise ValueError(f"Gain vector length {gain_.size} does not match n_modes={n_actuators}")
 modulation_radius = param['wavefront_sensor']['modulation_radius']
-maximum_radial_order = radial_order_from_n_modes(n_actuators)
+# here we do not use n_actuators because it can be reduced to analyse the error on a small number of modes.
+if param['system']['name'] == "ANDES":
+    maximum_radial_order = 88
+elif param['system']['name'] == "SOUL":
+    maximum_radial_order = 35
+else:
+    maximum_radial_order = radial_order_from_n_modes(n_actuators)
  
 fitting_coeff = 0.2778
 alpha_ = -17/3
