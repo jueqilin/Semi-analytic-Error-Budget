@@ -6,9 +6,9 @@ import numpy as np
 from astropy.io import fits
 
 from speculaconfig.yaml_overrides import write_yaml_overrides
-from speculaconfig.utils import get_pupil_mask, read_freq, get_psd, compute_and_save_rec
+from speculaconfig.utils import get_pupil_mask, read_freq, get_psd, compute_and_save_rec, save_correction_vector
 
-from .root import sn_path, pupil_path, frames_path, im_path, rec_path, calib_dir, alias_path, ogs_path, temp_alias_path
+from .root import sn_path, pupil_path, frames_path, im_path, calib_dir, alias_path, ogs_path, temp_alias_path
 
 
 rMods = np.array([0,1,2,3,4]) #([2,3,4,5,6])
@@ -98,8 +98,17 @@ for i,n_subap in enumerate(n_subaps):
 
 
 
-# 3.5 Compute correction vectors for SIMPC
-# ...
+# 3.5 Save correction vectors for SIMPC computation
+# These vectors go from max_corr to min_corr linearly over the radial orders of the corrected modes,
+# and are 0 for all modes from Ncorrmodes to Nmodes.
+# Note that 1 means perfect removal of the mode and 0 means no correction.
+for N in n_modes:
+    save_correction_vector(tag='s0.6', max_corr=0.99, max_corr=0.4, Ncorrmodes=N, Nmodes=660)
+    save_correction_vector(tag='s0.8', max_corr=0.95, max_corr=0.2, Ncorrmodes=N, Nmodes=660)
+    save_correction_vector(tag='s1.0', max_corr=0.9, max_corr=0.1, Ncorrmodes=N, Nmodes=660)
+    save_correction_vector(tag='s1.2', max_corr=0.85, max_corr=0.1, Ncorrmodes=N, Nmodes=660)
+    save_correction_vector(tag='s1.4', max_corr=0.8, max_corr=0.1, Ncorrmodes=N, Nmodes=660)
+
 
 # 4. Calibrate SIMPC vs n_subap, rMods, r0/correction
 fs = read_freq(params_path=f'./{main_config}')
@@ -122,7 +131,7 @@ for i,n_subap in enumerate(n_subaps):
                         f"pyr.mod_amp: {rMod:.1f}, "
                         f"pushpull.nmodes: {N:1.0f}, "
                         f"pyr_im_calibrator.nmodes: {N:1.0f}, "
-                        # f"modal_analysis_random.nmodes: {N:1.0f}, "
+                        f"scale_random.constant_mul_data: 'correction_vector_{N:1.0f}modes_s{seeing:1.1f}', "
                         f"dm_random.nmodes: {N:1.0f}, "
                         f"dm.nmodes: {N:1.0f}, "
                         f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "

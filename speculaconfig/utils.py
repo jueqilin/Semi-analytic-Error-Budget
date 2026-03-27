@@ -9,7 +9,7 @@ from specula.lib.make_mask import make_mask
 from specula.lib.mmse_reconstructor import compute_mmse_reconstructor
 
 
-from .root import im_path, rec_path
+from .root import im_path, rec_path, data_path
 
 def radial_order(i_mode):
     noll = i_mode + 2
@@ -50,6 +50,25 @@ def read_freq(params_path:str, obj_name:str=None):
         else:
             fs = 1.0/float(params[obj_name]['dt'])
     return fs
+
+def save_correction_vector(tag:str,min_corr:float,max_corr:float,
+                        max_rad_order:int=36,Nmodes:int=660,
+                        Ncorrmodes:int=None):
+    if Ncorrmodes is None:
+        Ncorrmodes = Nmodes
+    cc = np.linspace(max_corr,min_corr,max_rad_order-2)
+    tt = np.hstack([np.repeat(cc[i-2],i) for i in range(2,max_rad_order)])
+    residuals = np.zeros(Nmodes)
+    residuals[:Ncorrmodes] = tt[:Ncorrmodes]
+    
+    fname = f'correction_vector_{Ncorrmodes}modes_{tag}.fits'
+    filepath = os.path.join(data_path,fname)
+    hdr = fits.Header()
+    hdr['VERSION'] = 1
+    hdr['OBJ_TYPE'] = 'BaseValue'
+    hdr['NDARRAY'] = 1
+    fits.writeto(filepath, residuals, hdr, overwrite=False)
+    print(f'Saved correction vector as {fname}')
 
 
 
