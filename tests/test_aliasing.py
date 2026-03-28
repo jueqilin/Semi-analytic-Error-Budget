@@ -33,7 +33,8 @@ from src.Functions import (
     aliasing_variance,
     funct_d2,
     build_transfer_function,
-    compute_andes_optical_gain
+    compute_andes_optical_gain,
+    extract_propagation_coefficients
 )
 
 # ── P3 imports ───────────────────────────────────────────────────────────────
@@ -70,7 +71,6 @@ _D = 8.222                  # Telescope diameter [m]
 _R0 = 0.15                  # Fried parameter [m] at 500 nm
 _WIND_SPEED = 15.0          # Wind speed [m/s]
 _WVL_REF = 500e-9           # Evaluation wavelength [m]
-_WVL_WFS = 750e-9           # WFS sensing wavelength [m]
 
 _MODULATION_RADIUS = 3.0    # lambda / D
 _MAX_RADIAL_ORDER = 30      # Cut-off for SA aliasing frequencies
@@ -87,9 +87,6 @@ _N_MODES = 500              # Total modes to integrate in SA
 _FREQS_HZ = np.logspace(-3, np.log10(_FRAME_RATE / 2.0), 1000)
 _OMEGA = 2.0 * np.pi * _FREQS_HZ
 _T0 = 1.0 / _FRAME_RATE
-
-# Aliasing file
-_SA_SLOPES = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES", "slopes_rms_time_avg_all.fits")
 
 @unittest.skipUnless(
     os.path.isfile(_P3_INI_8M) and os.path.isfile(_SA_OPT_GAIN_MOD0),
@@ -114,7 +111,7 @@ class TestAliasingVariance(unittest.TestCase):
 
         cls.fao.ao.tel.D = _D
         cls.fao.ao.atm.wvl = _WVL_REF
-        cls.fao.ao.atm.r0 = _R0 
+        cls.fao.ao.atm.r0 = _R0
         cls.fao.ao.atm.wSpeed = np.array([_WIND_SPEED])
 
         # Ensure controller transfer functions are built
@@ -138,9 +135,15 @@ class TestAliasingVariance(unittest.TestCase):
         d2 = funct_d2(_DELAY)
         gain_arr = np.full(_N_MODES, _GAIN)
 
-        H_n = build_transfer_function(
-            gain_arr, _OMEGA, _T0, _N_MODES,
-            [1], [1], [1], [1], d2, [1], "H_n"
+        plant_num = np.array([1.0])
+        plant_den = d2
+        _, H_n = build_transfer_function(
+            _OMEGA,
+            _T0,
+            _N_MODES,
+            plant_num,
+            plant_den,
+            gain=gain_arr,
         )
 
         # 2. Compute Optical Gain for ANDES
@@ -158,14 +161,20 @@ class TestAliasingVariance(unittest.TestCase):
             self.skipTest(f"Failed to compute SA optical gain: {e}")
 
         # 3. Compute SA Aliasing Variance
-        var_alias_sa_rad2, _, _ = aliasing_variance(
-            H_n, _N_MODES, _OMEGA, _ALPHA, _D, seeing_arcsec,
-            _MODULATION_RADIUS, _WIND_SPEED, _MAX_RADIAL_ORDER,
-            _SA_RECONSTRUCTOR, c_optg, _SA_SIGMA_SLOPES
+        sa_alias_nm2, _, _, _ = aliasing_variance(
+            transf_funct=H_n,
+            actuators_number=_N_MODES,
+            omega_temp_freq_interval=_OMEGA,
+            c_optg=c_optg,
+            alpha=_ALPHA,
+            telescope_diameter=_D,
+            seeing=seeing_arcsec,
+            modulation_radius=_MODULATION_RADIUS,
+            windspeed=_WIND_SPEED,
+            maximum_radial_order_corrected=_MAX_RADIAL_ORDER,
+            file_path_matrix_R=_SA_RECONSTRUCTOR,
+            file_path_sigma_slopes=_SA_SIGMA_SLOPES
         )
-
-        # SA variance is in nm^2.
-        sa_alias_nm2 = float(var_alias_sa_rad2)
 
         if _VERBOSE:
             print("\n" + "="*60)
