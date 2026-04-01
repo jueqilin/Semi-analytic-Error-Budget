@@ -529,7 +529,7 @@ def extract_propagation_coefficients(file_path_matrix_R):
 # =============================================================================
 
 # Function to build the optical gain grid from FITS files.
-# It reads the last-mode optical gain values for two modulation radii and arranges them 
+# It reads the modal optical gain values for two modulation radii and arranges them 
 # into a 2D grid indexed by modulation radius and seeing.
 
 def _load_andes_gain_grid(file_mod0, file_mod4):
@@ -537,20 +537,22 @@ def _load_andes_gain_grid(file_mod0, file_mod4):
     Loads and stacks the ANDES optical gain data from two separate FITS files.
     """
     with fits.open(file_mod0) as hdul:
-        gain_mod0 = hdul[0].data[:, -1]                # pylint: disable=E1101 
+        gain_mod0 = hdul[0].data                # pylint: disable=E1101 
         
     with fits.open(file_mod4) as hdul:
-        gain_mod4 = hdul[0].data[:, -1]                 # pylint: disable=E1101 
+        gain_mod4 = hdul[0].data                 # pylint: disable=E1101 
         
-    return np.vstack([gain_mod0, gain_mod4])
+  
+    return np.stack([gain_mod0, gain_mod4], axis=0)
 
 
-# Function to compute the optical gain for a given modulation radius and seeing.
+# Function to compute the modal optical gain for a given modulation radius and seeing.
 # Uses an optical gain grid from ANDES_og_mod0.fits and ANDES_og_mod4.fits and performs
-# a 2D interpolation to estimate the gain for the given modulation radius and seeing
+# a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
 
 def compute_andes_optical_gain(file_mod0, file_mod4,
-                               seeing, modulation_radius):
+                               seeing, modulation_radius, 
+                               actuators_number):
     """
     Computes the optical gain for the ANDES system using 2D interpolation.
     Axes: modulation radius, seeing.
@@ -561,27 +563,29 @@ def compute_andes_optical_gain(file_mod0, file_mod4,
     modal_radius_vals = np.array([0.0, 4.0])
     seeing_vals = np.array([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])
     
-    # 2D Interpolation
-    interp_optical_gain = RegularGridInterpolator(
-        (modal_radius_vals, seeing_vals), 
-        gain_grid, 
-        bounds_error=False, 
-        fill_value=None
-    )
+    interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals), 
+                                                  gain_grid, bounds_error=False, 
+                                                  fill_value=None)
+
+    # interpolation point
+    point = np.array([[modulation_radius, seeing]])
+    interpolated_gain = interp_optical_gain(point)
     
-    interpolated_gain = float(interp_optical_gain((modulation_radius, seeing)))
     return interpolated_gain
+    
 
+# Reshape the interpolated optical gain to match the PSD dimensions and avoid broadcasting issues
+    
+def final_andes_optical_gain (file_mod0, file_mod4, seeing, modulation_radius, 
+                              actuators_number):
+    
+    interp_gain = compute_andes_optical_gain(file_mod0, file_mod4, seeing, 
+                                             modulation_radius, actuators_number)
 
-# Function to perform a 2D interpolation of the optical gain over modulation 
-# radius and seeing using RegularGridInterpolator
-
-def double_interpolation_optical_gain(modal_radius_val, seeing_val, optical_gain_grid, modulation_radius, seeing):
-   
-    interp_optical_gain = RegularGridInterpolator((modal_radius_val, seeing_val), optical_gain_grid, bounds_error=False, fill_value=None)  
-     
-    last_opt_gain = float(interp_optical_gain((modulation_radius, seeing)))
-    return last_opt_gain
+    interp_gain_cut = interp_gain[:, :actuators_number]
+    interp_gain_cut_transp = interp_gain_cut.T
+    
+    return interp_gain_cut_transp
 
 
 # SOUL optical gain data is stored in a single FITS file as a 3D data cube,
@@ -742,7 +746,7 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
                     maximum_radial_order_corrected, file_path_matrix_R,
                     file_path_sigma_slopes=None):
 
-    # optical gain effects are applied in the next step, so this is an "intermediate" results
+    # optical gain effects are applied in the next step, so this is an "intermediate" results
     k = k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
                          omega_temp_freq_interval, file_path_matrix_R, windspeed,
                          maximum_radial_order_corrected, file_path_sigma_slopes)
@@ -759,7 +763,7 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
 
 def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval):
 
-    # optical gain effects are applied in the next step, so this is an "intermediate" results
+    # optical gain effects are applied in the next step, so this is an "intermediate" results
     PSD_intermed = compute_noise_PSD_intermediate(
         omega_temp_freq_interval,
         actuators_number,

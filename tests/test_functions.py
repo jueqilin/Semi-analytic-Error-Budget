@@ -517,12 +517,12 @@ class _ChdirMixin:
 class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
     """_load_andes_gain_grid assembles a 2×N array from ANDES FITS files."""
 
-    def test_output_is_2d_ndarray(self):
+    def test_output_is_3d_ndarray(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
         grid = _load_andes_gain_grid(file_mod0, file_mod4)
         self.assertIsInstance(grid, np.ndarray)
-        self.assertEqual(grid.ndim, 2)
+        self.assertEqual(grid.ndim, 3)
 
     def test_two_rows_one_per_modulation_radius(self):
         # One row for mod0, one for mod4
