@@ -15,7 +15,7 @@ from scipy import integrate
 from astropy.io import fits                                                    
 
 from src.Functions import total_variance
-from src.Functions import compute_andes_optical_gain
+from src.Functions import final_andes_optical_gain
 #from src.Functions import compute_soul_optical_gain
 from src.Functions import extract_propagation_coefficients
 from src.Functions import PSD_final_alias
@@ -130,7 +130,7 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
                                              reconstruction_matrix_path, optical_gain_models, psd_turbulence,
                                              psd_windshake, sigma_slopes_path)
         
-    plt.plot(gain_value, variance_total, marker='o')    
+    plt.plot(gain_value, variance_total, marker='o')  
     plt.xlabel('Gain')
     plt.ylabel('Total variance')
     plt.yscale('log')
@@ -493,8 +493,8 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
           system="ANDES"):
 
     if system == "ANDES":
-                c_optg = compute_andes_optical_gain(optical_gain_models[0], optical_gain_models[1],
-                                                    seeing, modulation_radius)
+                c_optg = final_andes_optical_gain(optical_gain_models[0], optical_gain_models[1],
+                                                  seeing, modulation_radius, actuators_number)
     # TODO not supported yet
     #elif system == "SOUL":
     #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
@@ -512,8 +512,6 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
   
     modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0]) 
     
-    
-    
     sigma_slope_alias = double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
                                                          modulation_radius, seeing)
   
@@ -521,7 +519,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
     
     for i in range (actuators_number):
         
-        sigma_alias_2 = p_coefficient[i] * (sigma_slope_alias ** 2) / c_optg ** 2
+        sigma_alias_2 = p_coefficient[i] * (sigma_slope_alias ** 2) / c_optg[i] ** 2
         
         sigma_alias_2_two_modes += sigma_alias_2
         
@@ -546,17 +544,19 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
     
     print("ALIASING VARIANCE FROM PSD (OPEN LOOP):", sigma_alias_2_PSD_total)
     
-    sigma_alias_2_one_mode = p_coefficient * (sigma_slope_alias ** 2) / c_optg ** 2
+    sigma_alias_2_one_mode = p_coefficient[0] * (sigma_slope_alias ** 2) / c_optg[0] ** 2
     
-    print("ALIASING VARIANCE ONE MODE (OPEN LOOP):", sigma_alias_2_one_mode[0])
+    print("ALIASING VARIANCE ONE MODE (OPEN LOOP):", sigma_alias_2_one_mode)
     
     print("ALIASING VARIANCE FROM PSD ONE MODE (OPEN LOOP):", integral_per_mode[0])
     
+
+# Function to compare the mode 0 aliasing PSD from data files with the one computed 
     
-def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
-                          seeing, modulation_radius, wind_speed, maximum_radial_order_corrected,
-                          reconstruction_matrix_path, optical_gain_models, sigma_slopes_path,
-                          system="ANDES"):
+def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
+                           seeing, modulation_radius, wind_speed, maximum_radial_order_corrected,
+                           reconstruction_matrix_path, optical_gain_models, sigma_slopes_path,
+                           system="ANDES"):
     
     with fits.open("src/file_fits/ANDES/modal_psd_aliasing.fits") as hdul:
         data = hdul[0].data # pylint: disable=no-member
@@ -565,13 +565,15 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
         mode_0 = data[:, 1]
         
         freq_rad_s = 2 * np.pi * freq_hz
+        
         if system == "ANDES":
-            c_optg = compute_andes_optical_gain(optical_gain_models[0], optical_gain_models[1],
-                                                seeing, modulation_radius)
+            c_optg = final_andes_optical_gain(optical_gain_models[0], optical_gain_models[1],
+                                                seeing, modulation_radius, actuators_number)
         # TODO not supported yet
         #elif system == "SOUL":
         #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
-        PSD_aliasing_mode0_given = mode_0 / (c_optg ** 2 * 2 * np.pi)             
+       
+        PSD_aliasing_mode0_given = mode_0 / (c_optg[0] ** 2 * 2 * np.pi)             
         
     PSD_alising_mine = PSD_final_alias(
         c_optg,
@@ -590,32 +592,42 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
     
     PSD_alising_mine_mode0 = PSD_alising_mine[0,:]
     
-    plt.loglog(omega_temp_freq_interval, PSD_alising_mine_mode0, label="PSD alias mine mode 0")
-    plt.loglog(freq_rad_s, PSD_aliasing_mode0_given, label="PSD alias data mode 0")
+    PSD_aliasing_mode0_given_interp = np.interp(omega_temp_freq_interval, freq_rad_s, 
+                                                PSD_aliasing_mode0_given, left=0, right=0)
     
+    # diff = PSD_alising_mine_mode0 - PSD_aliasing_mode0_given_interp
+    ratio = PSD_alising_mine_mode0 / PSD_aliasing_mode0_given_interp
 
-    plt.xlabel("Frequency [rad/s]")
-    plt.ylabel("PSD")  
-    plt.title('PSD ALIASING - comparison')
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.loglog(omega_temp_freq_interval, PSD_alising_mine_mode0, label="PSD alias mine mode 0")
+    plt.loglog(omega_temp_freq_interval, PSD_aliasing_mode0_given_interp, label="PSD alias data mode 0")
+    plt.ylabel("PSD")
     plt.legend()
+    plt.grid()
+    
+    plt.subplot(2,1,2)
+    plt.semilogx(omega_temp_freq_interval, ratio)
+    plt.xlabel("Frequency [rad/s]")
+    plt.ylabel("Ratio (mine/data)")
     plt.grid()
     plt.show()
 
-    # N = len(freq_rad_s)   # = 501
 
-    # omega_cut = omega_temp_freq_interval[:N]
-    # PSD_mine_cut = PSD_alising_mine_mode0[:N]
-
-    # ratio = PSD_mine_cut / PSD_aliasing_mode0_given
-    # plt.figure()
-
-    # plt.semilogx(omega_cut, ratio)
-    # plt.xlabel("Frequency [rad/s]")
-    # plt.ylabel("Mine / Given")
-    # plt.grid()
-    # plt.title("PSD ratio")
-
-    # plt.show()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
 # Function to compute and plot the total open-loop and closed-loop PSD (mode 0) 

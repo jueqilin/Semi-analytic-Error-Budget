@@ -19,7 +19,7 @@ from src.Functions import load_PSD_windshake
 from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
-from src.Functions import compute_andes_optical_gain
+from src.Functions import final_andes_optical_gain
 from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
@@ -156,7 +156,7 @@ c_optg = 0
 
 if system == "ANDES":
     
-    c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius)
+    c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius, n_actuators)
 
 
 H_r_temp, H_n_meas = build_transfer_function(
