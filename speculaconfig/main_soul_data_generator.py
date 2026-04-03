@@ -6,7 +6,7 @@ import numpy as np
 from astropy.io import fits
 
 from speculaconfig.yaml_overrides import write_yaml_overrides
-from speculaconfig.utils import get_pupil_mask, read_freq, get_psd, compute_and_save_rec, save_correction_vector
+from speculaconfig.utils import get_pupil_mask, read_freq, compute_and_save_rec, save_correction_vector
 
 from .root import sn_path, pupil_path, frames_path, im_path, calib_dir, alias_path, ogs_path, temp_alias_path
 
@@ -112,7 +112,7 @@ for N in n_modes:
 
 # 4. Calibrate SIMPC vs n_subap, rMods, r0/correction
 fs = read_freq(params_path=f'./{main_config}')
-ncycles = 100
+ncycles = 40
 for i,n_subap in enumerate(n_subaps):
     pup_dist = np.max((min_pup_dist,max_pup_dist/max(n_subaps)*n_subap))
     N = n_modes[i]
@@ -130,6 +130,7 @@ for i,n_subap in enumerate(n_subaps):
                         f"pyr.pup_dist: {pup_dist:.1f}, "
                         f"pyr.mod_amp: {rMod:.1f}, "
                         f"pushpull.nmodes: {N:1.0f}, "
+                        f"pushpull.ncycles: {ncycles:1.0f}, "
                         f"pyr_im_calibrator.nmodes: {N:1.0f}, "
                         f"scale_random.constant_mul_data: 'correction_vector_{N:1.0f}modes_s{seeing:1.1f}', "
                         f"dm_random.nmodes: {N:1.0f}, "
@@ -137,13 +138,20 @@ for i,n_subap in enumerate(n_subaps):
                         f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "
                         f"seeing_random.constant: {seeing:1.1f}, "
                         f"pyr_im_calibrator.im_tag: '{simpc_tag}', "
+                        f"data_store.store_dir:         '{os.path.join(calib_dir,'scratch_simpc')}', "  
+                        f"data_store.create_tn: false, "
+                        f"data_store.inputs.input_list: ['s{seeing:1.1f}_{N:1.0f}modes_atmo-atmo_pc_modes.out_modes'], "
                         "}")
             write_yaml_overrides(input_string=overrides)
             try:
                 os.system(f"specula {main_config} calib_simpc.yml temp_overrides.yml")
                 # specula.main_simul(yml_files=[main_config, 'calib_simpc.yml'], overrides=overrides)
                 simpc = fits.getdata(os.path.join(im_path,simpc_tag+'.fits'))
-                og = np.diag(simpc.T @ im)/im_norm
+                og = np.diag(simpc.T @ im)/im_norm                
+                atmo_modes = fits.getdata(os.path.join(calib_dir,'scratch_simpc','s{seeing:1.1f}_{N:1.0f}modes_atmo.fits'))
+                atmo_rms = np.sqrt(np.mean(atmo_modes**2,axis=0))
+                atmo_res = np.sqrt(np.sum(atmo_rms**2))
+                tag += f'_{atmo_res:1.0f}Nm'
                 fits.writeto(os.path.join(ogs_path,tag+'_og.fits'),og)
                 print('Saved optical gains as: '+tag+'_og')
                 # for N in n_modes[:i]:
@@ -174,10 +182,14 @@ for i,n_subap in enumerate(n_subaps):
                     os.system(f"specula {main_config} calib_aliasing.yml temp_overrides.yml")
                     # specula.main_simul(yml_files=[main_config, 'calib_aliasing.yml'], overrides=overrides) #
                     alias_modes = fits.getdata(os.path.join(temp_alias_path,'pyr_modes.fits'))
-                    psd,f = get_psd(alias_modes.T, nperseg=1024, dt=1/fs)
-                    tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}_{N:1.0f}modes_alias_PSD'
-                    fits.writeto(os.path.join(alias_path,tag+'.fits'),psd,overwrite=True)
-                    print('Saved aliasing PSD as: '+tag)
+                    # psd,f = get_psd(alias_modes.T, nperseg=1024, dt=1/fs)
+                    # tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}_{N:1.0f}modes_alias_PSD'
+                    # fits.writeto(os.path.join(alias_path,tag+'.fits'),psd,overwrite=True)
+                    # print('Saved aliasing PSD as: '+tag)
+                    alias_rms = np.sqrt(np.mean(alias_modes**2,axis=0)) 
+                    tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}_{N:1.0f}modes_alias'
+                    fits.writeto(os.path.join(alias_path,tag+'.fits'),alias_rms,overwrite=True)
+                    print('Saved aliasing as: '+tag)
                 except FileExistsError:
                     pass
 
