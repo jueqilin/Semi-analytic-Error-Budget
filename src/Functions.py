@@ -15,7 +15,6 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from scipy import integrate
 from astropy.io import fits                                                    
-from functools import reduce                                                   
 import sympy as sp                                                             
 from scipy.interpolate import RegularGridInterpolator                        
 
@@ -32,6 +31,7 @@ DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
     'ANDES',
     'slopes_rms_time_avg_all.fits'
 )
+DEFAULT_ALIASING_ALPHA = -17 / 3
 
 
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
@@ -70,8 +70,8 @@ def radial_order_from_n_modes(n_modes):
 
 # Function to define the d2 array, whose length depends on the value of T_total.
 
-def funct_d2 (T_total):
-    
+def funct_d2(T_total):
+
     d2 = np.zeros(T_total + 1)
     d2[0] = 1
     
@@ -144,6 +144,9 @@ def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z):
 # Function to compute the controller (num_int, den_int) polynomial arrays for all modes using an integrator.
 
 def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
+
+    # Kept for API compatibility with the generic transfer-function builder.
+    _ = omega_temp_freq_interval, t_0
 
     num_int_example, den_int_example = build_integrator_controller_polynomials(gain[0])
 
@@ -480,8 +483,13 @@ def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp
 # See Equation (8) (in "Semianalytical error budget for adaptive optics systems with pyramid wavefront sensors", 
 # Agapito and Pinna, 2019)
 
-def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_number, 
-                       omega_temp_freq_interval): 
+def temporal_variance(
+    PSD_atmo_turb,
+    PSD_vibration,
+    transf_funct,
+    actuators_number,
+    omega_temp_freq_interval,
+):
 
     PSD_atmo = align_psd_modes(PSD_atmo_turb, actuators_number)
     PSD_vib_aligned = align_psd_modes(PSD_vibration, actuators_number)
@@ -550,42 +558,80 @@ def _load_andes_gain_grid(file_mod0, file_mod4):
 # Uses an optical gain grid from ANDES_og_mod0.fits and ANDES_og_mod4.fits and performs
 # a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
 
+def _format_modal_optical_gain(c_optg, actuators_number, gain_name="c_optg"):
+    """Normalize optical gain to a column vector of shape ``(N_modes, 1)``."""
+    gain_array = np.real_if_close(np.asarray(c_optg), tol=1000)
+
+    if np.iscomplexobj(gain_array):
+        gain_array = np.real(gain_array)
+
+    if gain_array.size == 0:
+        raise ValueError(f"{gain_name} must not be empty")
+
+    gain_vector = np.asarray(gain_array, dtype=float).reshape(-1)
+
+    if gain_vector.size == 1:
+        gain_vector = np.full(actuators_number, gain_vector.item(), dtype=float)
+    elif gain_vector.size < actuators_number:
+        raise ValueError(
+            f"{gain_name} contains only {gain_vector.size} values, "
+            f"but {actuators_number} modes are required"
+        )
+    else:
+        gain_vector = gain_vector[:actuators_number]
+
+    if np.any(np.isclose(gain_vector, 0.0)):
+        raise ValueError(f"{gain_name} must be non-zero for all requested modes")
+
+    return gain_vector[:, np.newaxis]
+
+
+# Function to compute the modal optical gain for a given modulation radius and seeing.
+# Uses an optical gain grid from ANDES_og_mod0.fits and ANDES_og_mod4.fits and performs
+# a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
+
 def compute_andes_optical_gain(file_mod0, file_mod4,
-                               seeing, modulation_radius, 
-                               actuators_number):
+                               seeing, modulation_radius,
+                               actuators_number=None):
     """
     Computes the optical gain for the ANDES system using 2D interpolation.
-    Axes: modulation radius, seeing.
+
+    If ``actuators_number`` is provided, returns a modal column vector with
+    shape ``(N_modes, 1)``. Otherwise, returns a representative scalar optical
+    gain averaged over the available modes.
     """
     gain_grid = _load_andes_gain_grid(file_mod0, file_mod4)
-    
+
     # Define the grid axes for ANDES
     modal_radius_vals = np.array([0.0, 4.0])
     seeing_vals = np.array([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])
-    
-    interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals), 
-                                                  gain_grid, bounds_error=False, 
+
+    interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals),
+                                                  gain_grid, bounds_error=False,
                                                   fill_value=None)
 
     # interpolation point
     point = np.array([[modulation_radius, seeing]])
-    interpolated_gain = interp_optical_gain(point)
-    
-    return interpolated_gain
-    
+    interpolated_gain = np.asarray(interp_optical_gain(point), dtype=float)
+
+    if actuators_number is None:
+        return float(np.mean(interpolated_gain))
+
+    return _format_modal_optical_gain(interpolated_gain, actuators_number)
+
 
 # Reshape the interpolated optical gain to match the PSD dimensions and avoid broadcasting issues
-    
-def final_andes_optical_gain (file_mod0, file_mod4, seeing, modulation_radius, 
-                              actuators_number):
-    
-    interp_gain = compute_andes_optical_gain(file_mod0, file_mod4, seeing, 
-                                             modulation_radius, actuators_number)
 
-    interp_gain_cut = interp_gain[:, :actuators_number]
-    interp_gain_cut_transp = interp_gain_cut.T
-    
-    return interp_gain_cut_transp
+def final_andes_optical_gain(file_mod0, file_mod4, seeing, modulation_radius,
+                             actuators_number):
+
+    return compute_andes_optical_gain(
+        file_mod0,
+        file_mod4,
+        seeing,
+        modulation_radius,
+        actuators_number=actuators_number,
+    )
 
 
 # SOUL optical gain data is stored in a single FITS file as a 3D data cube,
@@ -665,9 +711,11 @@ def omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected):
 # Function to compute the preliminary aliasing coefficient k' based on sigma slope, 
 # temporal frequency interval and system parameters. 
 
-def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescope_diameter, 
-                    windspeed, maximum_radial_order_corrected):
-    
+def compute_k_prime(omega_temp_freq_interval, sigma_slope_alias,
+                    telescope_diameter, windspeed,
+                    maximum_radial_order_corrected,
+                    alpha=DEFAULT_ALIASING_ALPHA):
+
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
     
     omega_min = np.min(omega_temp_freq_interval) 
@@ -684,10 +732,11 @@ def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescop
 # It uses sigma slope data from FITS files and applies 2D interpolation over 
 # modulation radius and seeing.
 
-def k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter, 
+def k_coeff_aliasing(modulation_radius, seeing, telescope_diameter,
                      omega_temp_freq_interval, file_path_matrix_R, windspeed,
-                     maximum_radial_order_corrected, file_path_sigma_slopes=None):
-    
+                     maximum_radial_order_corrected,
+                     alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
+
     data_slopes = read_sigma_slopes(file_path_sigma_slopes)  
     
     seeing_vals = data_slopes[0,0,:]                                           
@@ -696,8 +745,14 @@ def k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
     sigma_slope_alias = double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
                                                          modulation_radius, seeing)
     
-    k_pr = compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescope_diameter, 
-                           windspeed, maximum_radial_order_corrected)
+    k_pr = compute_k_prime(
+        omega_temp_freq_interval,
+        sigma_slope_alias,
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
+        alpha=alpha,
+    )
     
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
     
@@ -714,9 +769,11 @@ def k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
 
 # Function to compute the aliasing PSD matrix from the modal coefficients k.
 
-def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k, 
-                             alpha, telescope_diameter, windspeed, maximum_radial_order_corrected):
-    
+def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k,
+                             telescope_diameter, windspeed,
+                             maximum_radial_order_corrected,
+                             alpha=DEFAULT_ALIASING_ALPHA):
+
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
     
     PSDaliasing = np.zeros((actuators_number, len(omega_temp_freq_interval)))
@@ -741,21 +798,37 @@ def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k,
 # Computes the final aliasing PSD by scaling the intermediate aliasing PSD
 # with the optical gain factor (1/c_optg^2).
 
-def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
+def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval,
                     telescope_diameter, seeing, modulation_radius, windspeed,
                     maximum_radial_order_corrected, file_path_matrix_R,
-                    file_path_sigma_slopes=None):
+                    alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
 
-    # optical gain effects are applied in the next step, so this is an "intermediate" results
-    k = k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
-                         omega_temp_freq_interval, file_path_matrix_R, windspeed,
-                         maximum_radial_order_corrected, file_path_sigma_slopes)
-    
-    PSD_intermed = aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, 
-                                            k, alpha, telescope_diameter, windspeed, 
-                                            maximum_radial_order_corrected)
+    optical_gain = _format_modal_optical_gain(c_optg, actuators_number)
 
-    return PSD_intermed / (c_optg**2)
+    # optical gain effects are applied in the next step, so this is an "intermediate" result
+    k = k_coeff_aliasing(
+        modulation_radius,
+        seeing,
+        telescope_diameter,
+        omega_temp_freq_interval,
+        file_path_matrix_R,
+        windspeed,
+        maximum_radial_order_corrected,
+        alpha=alpha,
+        file_path_sigma_slopes=file_path_sigma_slopes,
+    )
+
+    PSD_intermed = aliasing_psd_from_coeffs(
+        actuators_number,
+        omega_temp_freq_interval,
+        k,
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
+        alpha=alpha,
+    )
+
+    return PSD_intermed / (optical_gain ** 2)
 
 
 # Computes the final measurement-noise PSD by scaling the intermediate noise PSD
@@ -763,14 +836,16 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
 
 def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval):
 
-    # optical gain effects are applied in the next step, so this is an "intermediate" results
+    optical_gain = _format_modal_optical_gain(c_optg, actuators_number)
+
+    # optical gain effects are applied in the next step, so this is an "intermediate" result
     PSD_intermed = compute_noise_PSD_intermediate(
         omega_temp_freq_interval,
         actuators_number,
         sigma2_w,
     )
 
-    return PSD_intermed / (c_optg**2)
+    return PSD_intermed / (optical_gain ** 2)
   
 
 # Computes the aliasing variance by applying the transfer function to the aliasing PSD 
@@ -778,23 +853,23 @@ def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval)
 # See Equation (15) (in "Semianalytical error budget for adaptive optics systems
 # with pyramid wavefront sensors", Agapito and Pinna, 2019).  
 
-def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval, 
-                       c_optg, alpha, telescope_diameter, seeing, modulation_radius, 
-                       windspeed, maximum_radial_order_corrected, file_path_matrix_R,
-                       file_path_sigma_slopes=None):
-    
+def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
+                      c_optg, telescope_diameter, seeing, modulation_radius,
+                      windspeed, maximum_radial_order_corrected, file_path_matrix_R,
+                      alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
+
     PSD_input = PSD_final_alias(
         c_optg,
         actuators_number,
         omega_temp_freq_interval,
-        alpha,
         telescope_diameter,
         seeing,
         modulation_radius,
         windspeed,
         maximum_radial_order_corrected,
         file_path_matrix_R,
-        file_path_sigma_slopes,
+        alpha=alpha,
+        file_path_sigma_slopes=file_path_sigma_slopes,
     )
     
     variance_alias_OL, variance_alias_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
@@ -852,7 +927,7 @@ def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_o
 # PSD over the entire frequency range, as stated in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna (2019).
 
-def compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, sigma2_w):
+def compute_noise_PSD_intermediate(omega_temp_freq_interval, actuators_number, sigma2_w):
     
     PSD_w_intermed = np.zeros((actuators_number, len(omega_temp_freq_interval)))
   
@@ -872,11 +947,10 @@ def compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, 
 # variance, as described in Equation (10) (in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna (2019). 
 
-def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
-                      photon_flux, telescope_diameter,frame_rate, magnitudo, n_subaperture, 
-                      collecting_area, file_path_matrix_R, omega_temp_freq_interval, 
-                      transf_funct, actuators_number, c_optg, alpha, maximum_radial_order_corrected,
-                      seeing, modulation_radius, windspeed, file_path_sigma_slopes=None):
+def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
+                     photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture,
+                     collecting_area, file_path_matrix_R, transf_funct,
+                     actuators_number, omega_temp_freq_interval, c_optg):
     
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
@@ -952,12 +1026,35 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
 
 # Function to obtain the PSDs (temp, alias, meas) OL and CL 
 
-def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, actuators_number, 
-                       alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                       maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, 
-                       dark_curr, read_out_noise, photon_flux, frame_rate, magnitudo, 
-                       n_subaperture, collecting_area, temporal_frequencies, frequencies,
-                       H_r, H_n, file_path_matrix_R, file_path_sigma_slopes):
+def compute_PSD_OL_CL(
+    PSD_atmo_turb,
+    PSD_vibration,
+    omega_temp_freq_interval,
+    actuators_number,
+    alpha,
+    telescope_diameter,
+    seeing,
+    modulation_radius,
+    windspeed,
+    maximum_radial_order_corrected,
+    c_optg,
+    F_excess,
+    pixel_pos,
+    sky_bkg,
+    dark_curr,
+    read_out_noise,
+    photon_flux,
+    frame_rate,
+    magnitudo,
+    n_subaperture,
+    collecting_area,
+    temporal_frequencies,
+    frequencies,
+    H_r,
+    H_n,
+    file_path_matrix_R,
+    file_path_sigma_slopes,
+):
     
     if np.array_equal(temporal_frequencies, frequencies):
     
@@ -972,19 +1069,40 @@ def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, a
         
         
     
-    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, c_optg,
-                                                                 alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                                                                 maximum_radial_order_corrected, file_path_matrix_R,  
-                                                                 file_path_sigma_slopes)  
+    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance(
+        H_n,
+        actuators_number,
+        omega_temp_freq_interval,
+        c_optg,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        windspeed,
+        maximum_radial_order_corrected,
+        file_path_matrix_R,
+        alpha=alpha,
+        file_path_sigma_slopes=file_path_sigma_slopes,
+    )
 
     
-    _, _, PSD_output_meas, PSD_input_meas = measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
-                                                              photon_flux, telescope_diameter,frame_rate, magnitudo, 
-                                                              n_subaperture, collecting_area, file_path_matrix_R, 
-                                                              omega_temp_freq_interval, H_n, actuators_number,
-                                                              c_optg, alpha, maximum_radial_order_corrected,
-                                                              seeing, modulation_radius, windspeed, 
-                                                              file_path_sigma_slopes)
+    _, _, PSD_output_meas, PSD_input_meas = measure_variance(
+        F_excess,
+        pixel_pos,
+        sky_bkg,
+        dark_curr,
+        read_out_noise,
+        photon_flux,
+        telescope_diameter,
+        frame_rate,
+        magnitudo,
+        n_subaperture,
+        collecting_area,
+        file_path_matrix_R,
+        H_n,
+        actuators_number,
+        omega_temp_freq_interval,
+        c_optg,
+    )
     
    
     return PSD_output_temp, PSD_input_temp, PSD_output_alias, PSD_input_alias, PSD_output_meas, PSD_input_meas
@@ -1182,13 +1300,14 @@ def _select_single_mode_psd(PSD_in, mode_index, array_name, n_frequencies, allow
 
 def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interval, t_0,
                                              PSD_atmo_turb, PSD_vibration,
-                                             alpha, telescope_diameter, seeing,
+                                             telescope_diameter, seeing,
                                              modulation_radius, windspeed,
                                              maximum_radial_order_corrected, c_optg,
                                              F_excess, pixel_pos, sky_bkg, dark_curr,
                                              read_out_noise, photon_flux, frame_rate,
                                              magnitudo, n_subaperture, collecting_area,
                                              file_path_matrix_R,
+                                             alpha=DEFAULT_ALIASING_ALPHA,
                                              file_path_sigma_slopes=None,
                                              static_fit_variance=0.0,
                                              num1=None, num2=None, num3=None,
@@ -1214,8 +1333,7 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
     if omega_temp_freq_interval.size == 0:
         raise ValueError("omega_temp_freq_interval must not be empty")
 
-    if np.isclose(c_optg, 0.0):
-        raise ValueError("c_optg must be non-zero to build aliasing and measurement PSDs")
+    c_optg_mode = float(_format_modal_optical_gain(c_optg, 1)[0, 0])
 
     n_frequencies = omega_temp_freq_interval.size
 
@@ -1238,9 +1356,17 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
                                                   n_frequencies, allow_missing=True)
 
     k_alias = np.asarray(
-        k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
-                         omega_temp_freq_interval, file_path_matrix_R, windspeed,
-                         maximum_radial_order_corrected, file_path_sigma_slopes),
+        k_coeff_aliasing(
+            modulation_radius,
+            seeing,
+            telescope_diameter,
+            omega_temp_freq_interval,
+            file_path_matrix_R,
+            windspeed,
+            maximum_radial_order_corrected,
+            alpha=alpha,
+            file_path_sigma_slopes=file_path_sigma_slopes,
+        ),
         dtype=float,
     )
 
@@ -1250,9 +1376,14 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
         )
 
     PSD_input_alias = aliasing_psd_from_coeffs(
-        1, omega_temp_freq_interval, np.array([k_alias[mode_index]], dtype=float),
-        alpha, telescope_diameter, windspeed, maximum_radial_order_corrected
-    ) / (c_optg ** 2)
+        1,
+        omega_temp_freq_interval,
+        np.array([k_alias[mode_index]], dtype=float),
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
+        alpha=alpha,
+    ) / (c_optg_mode ** 2)
 
     slope_noise_variance = compute_slope_noise_variance(
         F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
@@ -1268,7 +1399,7 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
         )
 
     sigma2_w = np.array([p_coefficient[mode_index] * slope_noise_variance], dtype=float)
-    PSD_input_measurement = compute_noise_PSD_intermediate(omega_temp_freq_interval, 1, sigma2_w) / (c_optg ** 2)
+    PSD_input_measurement = compute_noise_PSD_intermediate(omega_temp_freq_interval, 1, sigma2_w) / (c_optg_mode ** 2)
 
     return SingleModeControllerOptimizationContext(
         mode_index=mode_index,
