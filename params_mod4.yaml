@@ -37,10 +37,15 @@ data:
   reconstruction_matrix: "src/file_fits/ANDES/ANDES_pyr100x100_wl850_fv2.1_slInten_ma3_bn1_mn4000_noise_prop_coeff.fits"
   # Path to wind-shake PSD (tip and tilt)
   windshake_psd: "src/file_fits/ANDES/morfeo_windshake8ms_psd_2022_1k.fits"
-  # Path to modulation models (mod0 and mod4)
+  # Path to ANDES modulation models (mod0 and mod4)
   optical_gain_models: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"]
   # Path to sigma slopes from aliasing
   sigma_slopes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
+  # Path to SOUL optical gain cube
+  optical_gain_cube_soul: "src/file_fits/LBT/SOUL_OPTG.fits"
+  # Path to SOUL modulation models (binning 2, mod0 and mod3)
+  optical_gain_models_soul: ["src/file_fits/LBT/SOUL_og_mod0_bn2.fits", "src/file_fits/LBT/SOUL_og_mod3_bn2.fits"]
+
 
 plant:
   # Denominator polynomial coefficients of the W transfer function
@@ -73,10 +78,12 @@ control:
   gain_n: 1
   # Total delay (WFS + RTC + DM) in [s]
   total_delay: 3
+  # Binning
+  bin: 3.5  
 
 system:
   # ANDES or SOUL
-  name: "ANDES"
+  name: "SOUL"
 
 display:
   # Enable/disable all visualization blocks

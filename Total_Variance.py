@@ -20,6 +20,7 @@ from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
 from src.Functions import final_andes_optical_gain
+from src.Functions import final_soul_optical_gain
 from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
@@ -62,6 +63,8 @@ file_path_R1 = param['data']['reconstruction_matrix']
 file_path_wind1 = param['data']['windshake_psd']
 file_optg = param['data']['optical_gain_models']
 file_sigma_slope = param['data']['sigma_slopes']
+#file_optg_cube_soul = param['data']['optical_gain_cube_soul']
+file_optg_soul = param['data']['optical_gain_models_soul']
 
 d1 = param['plant']['d_1']
 d3 = param['plant']['d_3']
@@ -88,6 +91,7 @@ g_maximum_mapping = {
 gain_maximum = g_maximum_mapping.get(total_delay)
 gain_number = param['control']['gain_n']
 gain_value = param['control'].get('gain_value', None)
+#bin_value = param['control']['bin']
 
 if gain_value is not None:
     gain_value_array = np.asarray(gain_value, dtype=float).ravel()
@@ -158,6 +162,13 @@ if system == "ANDES":
     
     c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius, n_actuators)
 
+elif system =="SOUL":
+    
+    c_optg = final_soul_optical_gain(file_optg_soul[0], file_optg_soul[1], seeing, modulation_radius, 
+                                     n_actuators)
+else:
+    
+    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
 
 H_r_temp, H_n_meas = build_transfer_function(
     omega_temporal_freqs,
@@ -246,7 +257,7 @@ if display:
                                t_0, plant_num, plant_den, telescope_diameter, fried_param, F_excess_noise,
                                sky_background, dark_current, readout_noise, phot_flux, frame_rate, magnitude,
                                n_subapert, collecting_area, x_pixel, fitting_coeff, alpha_, seeing,
-                               modulation_radius, wind_speed, maximum_radial_order, file_path_R1, file_optg,
+                               modulation_radius, wind_speed, maximum_radial_order, file_path_R1,
                                PSD_atmosf, PSD_wind_vib, file_sigma_slope)
 
 
@@ -257,14 +268,24 @@ if display:
     plot_all_PSD(omega_temporal_freqs, PSD_out_temp, PSD_out_meas, PSD_out_alias)
 
 
+    # check(file_path_R1, telescope_diameter, seeing, modulation_radius,
+    #       n_actuators, alpha_, omega_temporal_freqs, wind_speed, maximum_radial_order,
+    #       magnitude, bin_value, c_optg, file_sigma_slope)
+    #       ####### con bin_value (usando cubo per soul)
+    
     check(file_path_R1, telescope_diameter, seeing, modulation_radius,
           n_actuators, alpha_, omega_temporal_freqs, wind_speed, maximum_radial_order,
-          file_optg, file_sigma_slope, system="ANDES")
+          magnitude, c_optg, file_sigma_slope)
+    
 
-
+    # plot_PSD_alias_mode_0(n_actuators, omega_temporal_freqs, alpha_, telescope_diameter,
+    #                       seeing, modulation_radius, wind_speed, maximum_radial_order,
+    #                       bin_value, magnitude, file_path_R1, c_optg, file_sigma_slope) 
+    #                       ####### con bin_value (usando cubo per soul)
+    
     plot_PSD_alias_mode_0(n_actuators, omega_temporal_freqs, alpha_, telescope_diameter,
                           seeing, modulation_radius, wind_speed, maximum_radial_order,
-                          file_path_R1, file_optg, file_sigma_slope, system="ANDES")
+                          magnitude, file_path_R1, c_optg, file_sigma_slope)
 
 
     plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
@@ -272,7 +293,5 @@ if display:
                           maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
                           phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
                           file_path_R1, file_sigma_slope)
-
-
 
 
