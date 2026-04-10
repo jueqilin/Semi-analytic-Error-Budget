@@ -918,7 +918,7 @@ def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_o
     pixel_pos = np.array(pixel_pos)                                            
     pixel_variance = F_excess ** 2 * (n_phot_pix + sky_bkg + dark_curr) + read_out_noise**2
     pix_intensity = n_phot_pix
-    slope_variance = np.sum((pixel_pos ** 2) * pixel_variance) / (4 * (pix_intensity)) ** 2   
+    slope_variance = np.sum((pixel_pos ** 2) * pixel_variance) / ((np.sum(pix_intensity))** 2) 
    
     return slope_variance
  

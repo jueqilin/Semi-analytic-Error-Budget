@@ -432,7 +432,7 @@ class TestComputeSlopeNoiseVariance(unittest.TestCase):
         #   slope_var = sum(x_i^2 * n_phot) / (4*n_phot)^2 = sum(x_i^2) / (16*n_phot)
         pixel_pos = np.array([1.0, 0.0, 0.0, 0.0])
         n_phot = flux_for_frame_for_pixel(9e12, 38.5, 1000, 7, 100, 1000)
-        expected = np.sum(pixel_pos ** 2) / (16 * n_phot)
+        expected = np.sum(pixel_pos ** 2) / n_phot    
         result = compute_slope_noise_variance(
             1.0, pixel_pos, 0, 0, 0, 9e12, 38.5, 1000, 7, 100, 1000
         )
