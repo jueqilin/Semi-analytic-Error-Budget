@@ -688,7 +688,7 @@ def _load_soul_gain_grid(file_mod0_soul, file_mod3_soul):
 
 
 # Function to compute the modal optical gain for a given modulation radius and seeing.
-# Uses an optical gain grid from SOUL_og_mod0_bn2.fits and SOUL_og_mod3_bn2.fits and performs
+# Uses an optical gain grid from SOUL_og_mod0.fits and SOUL_og_mod3.fits and performs
 # a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
 
 def compute_soul_optical_gain(file_mod0_soul, file_mod3_soul, target_seeing, target_modulation_radius, 
@@ -701,7 +701,7 @@ def compute_soul_optical_gain(file_mod0_soul, file_mod3_soul, target_seeing, tar
     
     # Define the grid axes for SOUL
     modal_radius_vals = np.array([0.0, 3.0])
-    seeing_vals = np.array([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])    ######## VALORI DI SEEING PER SOUL?????    
+    seeing_vals = np.array([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])    
     
     interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals), 
                                                   gain_grid, bounds_error=False, 

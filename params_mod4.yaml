@@ -43,8 +43,8 @@ data:
   sigma_slopes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
   # Path to SOUL optical gain cube
   optical_gain_cube_soul: "src/file_fits/LBT/SOUL_OPTG.fits"
-  # Path to SOUL modulation models (binning 2, mod0 and mod3)
-  optical_gain_models_soul: ["src/file_fits/LBT/SOUL_og_mod0_bn2.fits", "src/file_fits/LBT/SOUL_og_mod3_bn2.fits"]
+  # Path to SOUL modulation models (binning 1, mod0 and mod3)
+  optical_gain_models_soul: ["src/file_fits/LBT/SOUL_og_mod0.fits", "src/file_fits/LBT/SOUL_og_mod3.fits"]
 
 
 plant:
