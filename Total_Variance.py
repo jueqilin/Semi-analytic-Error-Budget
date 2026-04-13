@@ -164,7 +164,8 @@ if system == "ANDES":
 
 elif system =="SOUL":
     
-    c_optg = final_soul_optical_gain(file_optg_cube_soul, bin_value, magnitude)
+    c_optg = final_soul_optical_gain(file_optg_soul[0], file_optg_soul[1], seeing, modulation_radius, 
+                                     n_actuators)
 else:
     
     raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
