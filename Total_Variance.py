@@ -63,7 +63,7 @@ file_path_R1 = param['data']['reconstruction_matrix']
 file_path_wind1 = param['data']['windshake_psd']
 file_optg = param['data']['optical_gain_models']
 file_sigma_slope = param['data']['sigma_slopes']
-#file_optg_cube_soul = param['data']['optical_gain_cube_soul']
+file_optg_cube_soul = param['data']['optical_gain_cube_soul']
 file_optg_soul = param['data']['optical_gain_models_soul']
 
 d1 = param['plant']['d_1']
@@ -91,7 +91,7 @@ g_maximum_mapping = {
 gain_maximum = g_maximum_mapping.get(total_delay)
 gain_number = param['control']['gain_n']
 gain_value = param['control'].get('gain_value', None)
-#bin_value = param['control']['bin']
+bin_value = param['control']['bin']
 
 if gain_value is not None:
     gain_value_array = np.asarray(gain_value, dtype=float).ravel()
@@ -164,8 +164,7 @@ if system == "ANDES":
 
 elif system =="SOUL":
     
-    c_optg = final_soul_optical_gain(file_optg_soul[0], file_optg_soul[1], seeing, modulation_radius, 
-                                     n_actuators)
+    c_optg = final_soul_optical_gain(file_optg_cube_soul, bin_value, magnitude)
 else:
     
     raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
