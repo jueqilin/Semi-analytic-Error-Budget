@@ -37,6 +37,8 @@ from src.plots import plot_PSD_OL_CL_mode_0
 
 param = load_parameters('params_mod4.yaml')
 print("Parameters loaded successfully.")
+
+system = param['system']['name']
   
 n_actuators = param['control']['n_modes']
 telescope_diameter = param['telescope']['telescope_diam']
@@ -59,10 +61,9 @@ sky_background = param['wavefront_sensor']['sky_backgr']
 dark_current = param['wavefront_sensor']['dark_curr']
 readout_noise = param['wavefront_sensor']['noise_readout']
   
-file_path_R1 = param['data']['reconstruction_matrix']
-file_path_wind1 = param['data']['windshake_psd']
+file_path_wind_andes = param['data']['windshake_psd']
+file_path_wind_soul = param['data']['windshake_psd_soul']
 file_optg = param['data']['optical_gain_models']
-file_sigma_slope = param['data']['sigma_slopes']
 file_optg_cube_soul = param['data']['optical_gain_cube_soul']
 file_optg_soul = param['data']['optical_gain_models_soul']
 
@@ -135,12 +136,34 @@ n_subapert = param['wavefront_sensor']['number_of_sub']
 collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
-system = param['system']['name']
+
+c_optg = 0
+
+if system == "ANDES":
+    
+    file_path_R1 = param['data']['reconstruction_matrix_andes']
+    file_sigma_slope = param['data']['sigma_slopes_andes']
+    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind_andes)
+    c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, 
+                                      modulation_radius, n_actuators)
+    file_modal_psd_alias_path = param['data']['modal_psd_alias_andes']
+    
+elif system =="SOUL":
+    
+    file_path_R1 = param['data']['reconstruction_matrix_soul']
+    file_sigma_slope = param['data']['sigma_slopes_soul']
+    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind_soul)
+    c_optg = final_soul_optical_gain(file_optg_soul[0], file_optg_soul[1], seeing, 
+                                     modulation_radius, n_actuators)
+    file_modal_psd_alias_path = param['data']['modal_psd_alias_soul']
+    
+else:
+    
+    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
 
 
 display = True
 
-freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1)
 
 if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):                                     
     
@@ -155,20 +178,6 @@ d2 = funct_d2(total_delay)
 plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
 plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
 
-
-c_optg = 0
-
-if system == "ANDES":
-    
-    c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius, n_actuators)
-
-elif system =="SOUL":
-    
-    c_optg = final_soul_optical_gain(file_optg_soul[0], file_optg_soul[1], seeing, modulation_radius, 
-                                     n_actuators)
-else:
-    
-    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
 
 H_r_temp, H_n_meas = build_transfer_function(
     omega_temporal_freqs,
@@ -238,9 +247,7 @@ var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas  = measure_variance (F_exces
                                                                          readout_noise, phot_flux, telescope_diameter, frame_rate, 
                                                                          magnitude, n_subapert, collecting_area, file_path_R1, 
                                                                          omega_temporal_freqs, H_n_meas, n_actuators, 
-                                                                         c_optg, alpha_, maximum_radial_order,
-                                                                         seeing, modulation_radius, wind_speed, 
-                                                                         file_path_sigma_slopes=None)
+                                                                         c_optg)
 
 print ("OPEN LOOP:")
 var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL)
@@ -280,12 +287,14 @@ if display:
 
     # plot_PSD_alias_mode_0(n_actuators, omega_temporal_freqs, alpha_, telescope_diameter,
     #                       seeing, modulation_radius, wind_speed, maximum_radial_order,
-    #                       bin_value, magnitude, file_path_R1, c_optg, file_sigma_slope) 
+    #                       bin_value, magnitude, file_path_R1, c_optg, file_sigma_slope, 
+    #                       file_modal_psd_alias_path) 
     #                       ####### con bin_value (usando cubo per soul)
     
     plot_PSD_alias_mode_0(n_actuators, omega_temporal_freqs, alpha_, telescope_diameter,
                           seeing, modulation_radius, wind_speed, maximum_radial_order,
-                          magnitude, file_path_R1, c_optg, file_sigma_slope)
+                          magnitude, file_path_R1, c_optg, file_sigma_slope, 
+                          file_modal_psd_alias_path)
 
 
     plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,

@@ -25,14 +25,6 @@ from arte.atmo.von_karman_covariance_calculator import VonKarmanSpatioTemporalCo
 from arte.atmo.cn2_profile import Cn2Profile                                                                                     
 
 
-DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    'src',
-    'file_fits',
-    'ANDES',
-    'slopes_rms_time_avg_all.fits'
-)
-
 
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
 
@@ -550,9 +542,7 @@ def _load_andes_gain_grid(file_mod0, file_mod4):
 # Uses an optical gain grid from ANDES_og_mod0.fits and ANDES_og_mod4.fits and performs
 # a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
 
-def compute_andes_optical_gain(file_mod0, file_mod4,
-                               target_seeing, target_modulation_radius, 
-                               actuators_number):
+def compute_andes_optical_gain(file_mod0, file_mod4, target_seeing, target_modulation_radius):
     """
     Computes the optical gain for the ANDES system using 2D interpolation.
     Axes: modulation radius, seeing.
@@ -586,19 +576,6 @@ def final_andes_optical_gain (file_mod0, file_mod4, target_seeing, target_modula
     interp_gain_cut_transp = interp_gain_cut.T
     
     return interp_gain_cut_transp
-
-
-  
-
-
-
-
-
-
-
-
-
-
 
 
 # ############
@@ -655,7 +632,7 @@ def final_andes_optical_gain (file_mod0, file_mod4, target_seeing, target_modula
     
 # # Function to interpolate the resulting optical gain values from the original modal values, 
 # # over the target modal values (defined by the number of actuators) and reshape the resulting
-# # interp_gain_final.
+# # interp_gain_final to match the PSD dimensions and avoid broadcasting issues.
 
 # def final_soul_optical_gain (file_soul_optical_gain_cube, target_binning, 
 #                              target_magnitude, actuators_number):
@@ -675,16 +652,6 @@ def final_andes_optical_gain (file_mod0, file_mod4, target_seeing, target_modula
     
 #     return interp_gain_final
     
-
-
-
-
-
-
-
-
-
-
   
 ############  VERSION 2
 
@@ -698,7 +665,7 @@ def _load_soul_gain_grid(file_mod0_soul, file_mod3_soul):
     """
     with fits.open(file_mod0_soul) as hdul:
         gain_mod0_soul = hdul[0].data                # pylint: disable=E1101 
-        seeing_values = hdul[1].data                        # pylint: disable=E1101 
+        seeing_values = hdul[1].data                 # pylint: disable=E1101 
         
     with fits.open(file_mod3_soul) as hdul:
         gain_mod3_soul = hdul[0].data                 # pylint: disable=E1101 
@@ -739,7 +706,7 @@ def final_soul_optical_gain (file_mod0_soul, file_mod3_soul, target_seeing, targ
                              actuators_number):
     
     interp_gain = compute_soul_optical_gain(file_mod0_soul, file_mod3_soul, target_seeing, 
-                                            target_modulation_radius, actuators_number)
+                                            target_modulation_radius)
 
     interp_gain_cut = interp_gain[:, :actuators_number]
     interp_gain_cut_transp = interp_gain_cut.T
@@ -750,32 +717,10 @@ def final_soul_optical_gain (file_mod0_soul, file_mod3_soul, target_seeing, targ
     return interp_gain_cut_transp
 
 
-#################
-#################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Function to read and return the sigma slopes data from the FITS file.
 
-def read_sigma_slopes(file_path_sigma_slopes=None):
-    if file_path_sigma_slopes is None:
-        file_path_sigma_slopes = DEFAULT_SIGMA_SLOPES_PATH
-    
-    
+def read_sigma_slopes(file_path_sigma_slopes):
+
     with fits.open (file_path_sigma_slopes) as hdul:
     
         data = hdul[0].data                                              # pylint: disable=E1101   
@@ -829,7 +774,7 @@ def compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescop
 
 def k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter, 
                      omega_temp_freq_interval, file_path_matrix_R, windspeed,
-                     maximum_radial_order_corrected, file_path_sigma_slopes=None):
+                     maximum_radial_order_corrected, file_path_sigma_slopes):
     
     data_slopes = read_sigma_slopes(file_path_sigma_slopes)  
     
@@ -887,7 +832,7 @@ def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k,
 def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
                     telescope_diameter, seeing, modulation_radius, windspeed,
                     maximum_radial_order_corrected, file_path_matrix_R,
-                    file_path_sigma_slopes=None):
+                    file_path_sigma_slopes):
 
     # optical gain effects are applied in the next step, so this is an "intermediate" results
     k = k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
@@ -924,7 +869,7 @@ def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval)
 def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval, 
                        c_optg, alpha, telescope_diameter, seeing, modulation_radius, 
                        windspeed, maximum_radial_order_corrected, file_path_matrix_R,
-                       file_path_sigma_slopes=None):
+                       file_path_sigma_slopes):
     
     PSD_input = PSD_final_alias(
         c_optg,
@@ -1018,8 +963,7 @@ def compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, 
 def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                       photon_flux, telescope_diameter,frame_rate, magnitudo, n_subaperture, 
                       collecting_area, file_path_matrix_R, omega_temp_freq_interval, 
-                      transf_funct, actuators_number, c_optg, alpha, maximum_radial_order_corrected,
-                      seeing, modulation_radius, windspeed, file_path_sigma_slopes=None):
+                      transf_funct, actuators_number, c_optg):
     
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
@@ -1125,9 +1069,7 @@ def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, a
                                                               photon_flux, telescope_diameter,frame_rate, magnitudo, 
                                                               n_subaperture, collecting_area, file_path_matrix_R, 
                                                               omega_temp_freq_interval, H_n, actuators_number,
-                                                              c_optg, alpha, maximum_radial_order_corrected,
-                                                              seeing, modulation_radius, windspeed, 
-                                                              file_path_sigma_slopes)
+                                                              c_optg)
     
    
     return PSD_output_temp, PSD_input_temp, PSD_output_alias, PSD_input_alias, PSD_output_meas, PSD_input_meas
@@ -1332,7 +1274,7 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
                                              read_out_noise, photon_flux, frame_rate,
                                              magnitudo, n_subaperture, collecting_area,
                                              file_path_matrix_R,
-                                             file_path_sigma_slopes=None,
+                                             file_path_sigma_slopes,
                                              static_fit_variance=0.0,
                                              num1=None, num2=None, num3=None,
                                              den1=None, den2=None, den3=None):

@@ -93,13 +93,12 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
                                                          dark_current, readout_noise,photon_flux, telescope_diameter,
                                                          frame_rate, magnitude, n_subaperture,collecting_area, 
                                                          reconstruction_matrix_path,omega_temp_freq_interval, H_n_meas, 
-                                                         number_of_actuators, gain_val, alpha, maximum_radial_order_corrected,
-                                                         seeing, modulation_radius, wind_speed, file_path_sigma_slopes=None)
+                                                         number_of_actuators, gain_val)
         
         
         print ("CLOSED LOOP:")
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
-                                         np.real(variance_measurement), np.real(variance_aliasing))            
+                                         np.real(variance_aliasing), np.real(variance_measurement))            
     
     return tot_variance
 
@@ -490,7 +489,7 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
 def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulation_radius,
           actuators_number, alpha, omega_temp_freq_interval, wind_speed,
           maximum_radial_order_corrected, magnitudo, c_optg, 
-          sigma_slopes_path):
+          file_path_sigma_slopes):
 
     
     p_coefficient = extract_propagation_coefficients(reconstruction_matrix_path)
@@ -501,7 +500,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
    
     print("Propagation coefficients loaded successfully.")
     
-    data_slopes = read_sigma_slopes(sigma_slopes_path)
+    data_slopes = read_sigma_slopes(file_path_sigma_slopes)
     seeing_vals = data_slopes[0,0,:]                                           
   
     modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0]) 
@@ -530,8 +529,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
         wind_speed,
         maximum_radial_order_corrected,
         reconstruction_matrix_path,
-        file_path_sigma_slopes=None,
-    )
+        file_path_sigma_slopes)
     
     integral_per_mode = integrate.simpson(PSD_al, omega_temp_freq_interval)
     sigma_alias_2_PSD_total = np.sum(integral_per_mode)
@@ -549,9 +547,11 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
     
 def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
                            seeing, target_modulation_radius, wind_speed, maximum_radial_order_corrected,
-                           magnitudo,reconstruction_matrix_path, c_optg, sigma_slopes_path):
+                           magnitudo,reconstruction_matrix_path, c_optg, sigma_slopes_path,
+                           modal_psd_aliasing_path):
+
     
-    with fits.open("src/file_fits/ANDES/modal_psd_aliasing.fits") as hdul:
+    with fits.open(modal_psd_aliasing_path) as hdul:
         data = hdul[0].data # pylint: disable=no-member
         
         freq_hz = data[:, 0]
@@ -647,9 +647,7 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
                                                               photon_flux, telescope_diameter,frame_rate, magnitudo, 
                                                               n_subaperture, collecting_area, file_path_matrix_R, 
                                                               omega_temp_freq_interval, H_n, actuators_number, 
-                                                              c_optg, alpha, maximum_radial_order_corrected,
-                                                              seeing, modulation_radius, windspeed, 
-                                                              file_path_sigma_slopes=None)
+                                                              c_optg)
     
     
     PSD_total_input_mode0 = PSD_input_temp[0] + PSD_input_alias[0] + PSD_input_meas[0]
