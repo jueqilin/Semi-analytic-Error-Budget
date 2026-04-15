@@ -570,7 +570,7 @@ def final_andes_optical_gain (file_mod0, file_mod4, target_seeing, target_modula
                               actuators_number):
     
     interp_gain = compute_andes_optical_gain(file_mod0, file_mod4, target_seeing, 
-                                             target_modulation_radius, actuators_number)
+                                             target_modulation_radius)
 
     interp_gain_cut = interp_gain[:, :actuators_number]
     interp_gain_cut_transp = interp_gain_cut.T
@@ -664,29 +664,30 @@ def _load_soul_gain_grid(file_mod0_soul, file_mod3_soul):
     Loads and stacks the ANDES optical gain data from two separate FITS files.
     """
     with fits.open(file_mod0_soul) as hdul:
-        gain_mod0_soul = hdul[0].data                # pylint: disable=E1101 
-        seeing_values = hdul[1].data                 # pylint: disable=E1101 
+        gain_mod0 = hdul[0].data                # pylint: disable=E1101 
+        #seeing_values = hdul[1].data           # pylint: disable=E1101      #####################
         
     with fits.open(file_mod3_soul) as hdul:
-        gain_mod3_soul = hdul[0].data                 # pylint: disable=E1101 
+        gain_mod3 = hdul[0].data                 # pylint: disable=E1101 
         
-  
-    return np.stack([gain_mod0_soul, gain_mod3_soul], axis=0), seeing_values
+   
+    return np.stack([gain_mod0, gain_mod3], axis=0)                      ######################
 
 
 # Function to compute the modal optical gain for a given modulation radius and seeing.
 # Uses an optical gain grid from SOUL_og_mod0.fits and SOUL_og_mod3.fits and performs
 # a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
 
-def compute_soul_optical_gain(file_mod0_soul, file_mod3_soul, target_seeing, 
+def compute_soul_optical_gain(file_mod0, file_mod3, target_seeing, 
                               target_modulation_radius):
     """
     Computes the optical gain for the SOUL system using 2D interpolation.
     Axes: modulation radius, seeing.
     """
-    gain_grid, seeing_vals = _load_soul_gain_grid(file_mod0_soul, file_mod3_soul)
+    gain_grid = _load_soul_gain_grid(file_mod0, file_mod3)                ######################
     
     # Define the grid axes for SOUL
+    seeing_vals = np.array([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])                          
     modal_radius_vals = np.array([0.0, 3.0]) 
     
     interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals), 
@@ -702,10 +703,10 @@ def compute_soul_optical_gain(file_mod0_soul, file_mod3_soul, target_seeing,
 
 # Reshape the interpolated optical gain to match the PSD dimensions and avoid broadcasting issues
     
-def final_soul_optical_gain (file_mod0_soul, file_mod3_soul, target_seeing, target_modulation_radius, 
+def final_soul_optical_gain (file_mod0, file_mod3, target_seeing, target_modulation_radius, 
                              actuators_number):
     
-    interp_gain = compute_soul_optical_gain(file_mod0_soul, file_mod3_soul, target_seeing, 
+    interp_gain = compute_soul_optical_gain(file_mod0, file_mod3, target_seeing, 
                                             target_modulation_radius)
 
     interp_gain_cut = interp_gain[:, :actuators_number]

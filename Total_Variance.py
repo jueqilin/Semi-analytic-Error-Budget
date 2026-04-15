@@ -35,10 +35,22 @@ from src.plots import plot
 from src.plots import plot_PSD_OL_CL_mode_0
 
 
-param = load_parameters('params_mod4.yaml')
-print("Parameters loaded successfully.")
+system = "SOUL"
 
-system = param['system']['name']
+if system == "ANDES":
+
+    param = load_parameters('params_ANDES.yaml')
+
+elif system =="SOUL":
+    
+    param = load_parameters('params_SOUL.yaml')
+      
+else:
+    
+    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
+
+
+print("Parameters loaded successfully.")
   
 n_actuators = param['control']['n_modes']
 telescope_diameter = param['telescope']['telescope_diam']
@@ -60,12 +72,14 @@ F_excess_noise = np.sqrt(value_F_excess_noise)
 sky_background = param['wavefront_sensor']['sky_backgr']
 dark_current = param['wavefront_sensor']['dark_curr']
 readout_noise = param['wavefront_sensor']['noise_readout']
-  
-file_path_wind_andes = param['data']['windshake_psd']
-file_path_wind_soul = param['data']['windshake_psd_soul']
+ 
+file_path_R1 = param['data']['reconstruction_matrix'] 
+file_sigma_slope = param['data']['sigma_slopes']
+file_path_wind = param['data']['windshake_psd']
+file_modal_psd_alias_path = param['data']['modal_psd_alias']
 file_optg = param['data']['optical_gain_models']
-file_optg_cube_soul = param['data']['optical_gain_cube_soul']
-file_optg_soul = param['data']['optical_gain_models_soul']
+# file_optg_cube = param['data']['optical_gain_cube']
+
 
 d1 = param['plant']['d_1']
 d3 = param['plant']['d_3']
@@ -119,9 +133,9 @@ if gain_.size != n_actuators:
     raise ValueError(f"Gain vector length {gain_.size} does not match n_modes={n_actuators}")
 modulation_radius = param['wavefront_sensor']['modulation_radius']
 # here we do not use n_actuators because it can be reduced to analyse the error on a small number of modes.
-if param['system']['name'] == "ANDES":
+if system == "ANDES":
     maximum_radial_order = 88
-elif param['system']['name'] == "SOUL":
+elif system == "SOUL":
     maximum_radial_order = 35
 else:
     maximum_radial_order = radial_order_from_n_modes(n_actuators)
@@ -136,33 +150,40 @@ n_subapert = param['wavefront_sensor']['number_of_sub']
 collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
-
-c_optg = 0
-
-if system == "ANDES":
     
-    file_path_R1 = param['data']['reconstruction_matrix_andes']
-    file_sigma_slope = param['data']['sigma_slopes_andes']
-    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind_andes)
+
+
+
+#########
+#########
+
+
+if system == "ANDES":    
+
     c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                      modulation_radius, n_actuators)
-    file_modal_psd_alias_path = param['data']['modal_psd_alias_andes']
-    
+                                  modulation_radius, n_actuators)
 elif system =="SOUL":
     
-    file_path_R1 = param['data']['reconstruction_matrix_soul']
-    file_sigma_slope = param['data']['sigma_slopes_soul']
-    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind_soul)
-    c_optg = final_soul_optical_gain(file_optg_soul[0], file_optg_soul[1], seeing, 
-                                     modulation_radius, n_actuators)
-    file_modal_psd_alias_path = param['data']['modal_psd_alias_soul']
-    
+    c_optg = final_soul_optical_gain(file_optg[0], file_optg[1], seeing, 
+                                  modulation_radius, n_actuators)  
 else:
     
     raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
 
+ 
+
+###########
+##########
+
+
+
+
+
+
 
 display = True
+
+freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
 
 
 if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):                                     
@@ -170,6 +191,8 @@ if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is N
     raise RuntimeError("PSD windshake or corresponding frequencies not loaded") 
 
 print("PSD windshake and corresponding frequencies loaded successfully.")
+
+
 
 PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_param, outer_scale,
                             layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs)

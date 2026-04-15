@@ -30,32 +30,21 @@ guide_star:
   # Number of photons per second per collecting area
   flux_photons: 9.0e12
   # Guide star magnitude
-  magn: 7
+  magn: 7.5
 
 data:
-  # Path to reconstruction matrix or noise propagation coefficients vector (ANDES)
-  reconstruction_matrix_andes: "src/file_fits/ANDES/ANDES_pyr100x100_wl850_fv2.1_slInten_ma3_bn1_mn4000_noise_prop_coeff.fits"
-  # Path to reconstruction matrix or noise propagation coefficients vector (SOUL)
-  reconstruction_matrix_soul: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn500_noise_prop_coeff.fits"
-  # Path to wind-shake PSD ANDES (tip and tilt)
-  windshake_psd: "src/file_fits/ANDES/morfeo_windshake8ms_psd_2022_1k.fits"
-  # Path to wind-shake PSD SOUL
-  windshake_psd_soul: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
-  # Path to ANDES modulation models (mod0 and mod4)
-  optical_gain_models: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"]
-  # Path to sigma slopes from aliasing (ANDES)
-  sigma_slopes_andes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
-  # Path to sigma slopes from aliasing (SOUL)
-  sigma_slopes_soul: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+  # Path to reconstruction matrix or noise propagation coefficients vector
+  reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn500_noise_prop_coeff.fits"
+  # Path to wind-shake PSD (tip and tilt)
+  windshake_psd: "src/file_fits/LBT/LBTelabVibrationsNew_transposed.fits"
+  # Path to sigma slopes from aliasing
+  sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
   # Path to SOUL optical gain cube
-  optical_gain_cube_soul: "src/file_fits/LBT/SOUL_OPTG.fits"
+  optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
   # Path to SOUL modulation models (binning 1, mod0 and mod3)
-  optical_gain_models_soul: ["src/file_fits/LBT/SOUL_og_mod0.fits", "src/file_fits/LBT/SOUL_og_mod3.fits"]
-  # Path to modal PSD_aliasing from specula (ANDES)
-  modal_psd_alias_andes:  "src/file_fits/ANDES/modal_psd_aliasing.fits"
-  # Path to modal PSD_aliasing from specula (SOUL)
-  modal_psd_alias_soul: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
-
+  optical_gain_models: ["src/file_fits/LBT/SOUL_og_mod0.fits", "src/file_fits/LBT/SOUL_og_mod3.fits"]
+  # Path to modal PSD_aliasing from specula 
+  modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
 
 plant:
   # Denominator polynomial coefficients of the W transfer function
@@ -89,11 +78,7 @@ control:
   # Total delay (WFS + RTC + DM) in [s]
   total_delay: 3
   # Binning
-  bin: 3.5  
-
-system:
-  # ANDES or SOUL
-  name: "SOUL"
+  bin: 1  
 
 display:
   # Enable/disable all visualization blocks
