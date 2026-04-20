@@ -20,7 +20,7 @@ from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
 from src.Functions import final_andes_optical_gain
-from src.Functions import final_soul_optical_gain
+from src.Functions import final_soul_optical_gain_2
 from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
@@ -33,6 +33,8 @@ from src.plots import check
 from src.plots import plot_PSD_alias_mode_0
 from src.plots import plot
 from src.plots import plot_PSD_OL_CL_mode_0
+from src.plots import plot_psd_vibr_soul
+from src.plots import optg_soul_version_1_vs_2
 
 
 system = "SOUL"
@@ -78,7 +80,7 @@ file_sigma_slope = param['data']['sigma_slopes']
 file_path_wind = param['data']['windshake_psd']
 file_modal_psd_alias_path = param['data']['modal_psd_alias']
 file_optg = param['data']['optical_gain_models']
-# file_optg_cube = param['data']['optical_gain_cube']
+file_optg_cube = param['data']['optical_gain_cube']
 
 
 d1 = param['plant']['d_1']
@@ -164,8 +166,8 @@ if system == "ANDES":
                                   modulation_radius, n_actuators)
 elif system =="SOUL":
     
-    c_optg = final_soul_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                  modulation_radius, n_actuators)  
+    c_optg = final_soul_optical_gain_2(file_optg[0], file_optg[1], seeing, 
+                                       modulation_radius, n_actuators)  
 else:
     
     raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
@@ -184,6 +186,9 @@ else:
 display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
+
+# PSD_wind_vib conversion
+PSD_wind_vib = PSD_wind_vib/(2 * np.pi)
 
 
 if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):                                     
@@ -225,7 +230,8 @@ var_fit = fitting_variance(fitting_coeff, n_actuators, telescope_diameter, fried
 
 
 if np.array_equal(temporal_freqs, freq): 
-
+    
+    
     var_vibr_OL, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance (PSD_wind_vib, H_r_temp, n_actuators, omega_temporal_freqs)
 
 else: 
@@ -290,8 +296,9 @@ if display:
                                modulation_radius, wind_speed, maximum_radial_order, file_path_R1,
                                PSD_atmosf, PSD_wind_vib, file_sigma_slope)
 
+    plot_psd_vibr_soul (file_path_wind)
 
-    plot(omega_temporal_freqs, H_r_temp, H_n_meas, H_n_alias, PSD_in_temp, PSD_out_temp,
+    plot(omega_temporal_freqs, H_r_temp, H_n_meas, H_n_alias, PSD_in_vibr, PSD_out_vibr, PSD_in_temp, PSD_out_temp,
          PSD_in_meas, PSD_out_meas, PSD_in_alias, PSD_out_alias)
                                
 
@@ -325,5 +332,9 @@ if display:
                           maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
                           phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
                           file_path_R1, file_sigma_slope)
+
+
+    optg_soul_version_1_vs_2 (file_optg_cube, bin_value, magnitude, n_actuators, 
+                              file_optg[0], file_optg[1], seeing, modulation_radius)
 
 

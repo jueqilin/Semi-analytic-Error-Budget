@@ -15,14 +15,12 @@ from scipy import integrate
 from astropy.io import fits                                                    
 
 from src.Functions import total_variance
-from src.Functions import final_andes_optical_gain
-from src.Functions import final_soul_optical_gain
 from src.Functions import extract_propagation_coefficients
 from src.Functions import PSD_final_alias
 from src.Functions import double_interpolation_sigma_slope
 from src.Functions import read_sigma_slopes
+from src.Functions import load_PSD_windshake
 
-###########
 from src.Functions import fitting_variance
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
@@ -30,8 +28,9 @@ from src.Functions import measure_variance
 from src.Functions import build_transfer_function
 from src.Functions import interpolate_and_normalize_psd
 from src.Functions import align_psd_modes
+from src.Functions import final_soul_optical_gain_1
+from src.Functions import final_soul_optical_gain_2
 
-##########
 
 
 # Function to compute the total residual variance for a set of gain values,
@@ -141,14 +140,14 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
 # Defines a function that allows, when needed, to plot PSD_in, PSD_out, and the transfer 
 # function for the variances (temp, alias, meas)
 
-def plot(f, H_r_t, H_n_m, H_n_a, PSD_in_t, PSD_out_t, PSD_in_m, PSD_out_m, PSD_in_a, PSD_out_a):
+def plot(f, H_r_t, H_n_m, H_n_a, PSD_in_v, PSD_out_v, PSD_in_t, PSD_out_t, PSD_in_m, PSD_out_m, PSD_in_a, PSD_out_a):
     
-    PSD_in = [PSD_in_t, PSD_in_m, PSD_in_a]                  
-    PSD_out = [PSD_out_t, PSD_out_m, PSD_out_a]              
-    H = [H_r_t, H_n_m, H_n_a]
+    PSD_in = [PSD_in_v, PSD_in_t, PSD_in_m, PSD_in_a]                  
+    PSD_out = [PSD_in_v, PSD_out_t, PSD_out_m, PSD_out_a]              
+    H = [H_r_t, H_r_t, H_n_m, H_n_a]
        
-    labels_PSD = ["temp", "meas","alias"]
-    labels_H = ["r", "n", "n"]
+    labels_PSD = ["vibr", "temp", "meas","alias"]
+    labels_H = ["r", "r", "n", "n"]
        
     for i in range(len(PSD_in)):                                                           
           
@@ -664,7 +663,75 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
     plt.show()
 
 
+# Plot to visualize the shape of the PSD vibration
 
+def plot_psd_vibr_soul (file_path_wind):
+    
+    freq, PSD_vibr = load_PSD_windshake(file_path_wind)
+    
+    PSD_vibr = PSD_vibr/(2 * np.pi)
+    freq = 2 * np.pi * freq
+   
+    print ("PSD_shape:", PSD_vibr.shape)
+    print ("Freq_shape:", freq.shape)
+    
+    plt.loglog(freq, PSD_vibr[0,:], label = "psd vibrations mode 0")  
+       
+    plt.xlabel('Frequency[rad/s]')
+    plt.ylabel('PSD')
+    plt.title('PSD_vibr mode 0')
+    plt.grid()
+    plt.legend()
+    plt.show()
+    
+
+    
+# Function to compare the optical gain values obtained from version 1 and version 2 
+# of the final_soul_optical_gain function.
+
+def optg_soul_version_1_vs_2 (file_soul_optical_gain_cube, target_binning, 
+                             target_magnitude, actuators_number, file_mod0, 
+                             file_mod3, target_seeing, target_modulation_radius):   
+    
+    optg_1 = final_soul_optical_gain_1(file_soul_optical_gain_cube, target_binning, 
+                                       target_magnitude, actuators_number)
+    
+    optg_2 = final_soul_optical_gain_2(file_mod0, file_mod3, target_seeing, target_modulation_radius, 
+                                       actuators_number)
+    
+    n_modes = np.arange(actuators_number)
+    
+    plt.plot(n_modes, optg_1, label = "Optical gain version 1")
+    plt.plot(n_modes, optg_2, label = "Optical gain version 2")
+    plt.xlabel('Modes')
+    plt.ylabel('Gain')
+    plt.title('OPTG Version 1 vs 2')
+    plt.grid()
+    plt.legend()
+    plt.show()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
     

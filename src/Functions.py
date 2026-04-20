@@ -373,7 +373,7 @@ def integrate_function(integrand_function, integr_interval):
     result = integrate.simpson(integrand_function, integr_interval)
     
     return result
-    
+
 
 # Function that allows us to load the windshake PSD and their corresponding frequencies
 
@@ -422,7 +422,7 @@ def resize_psd_like(PSD_atmo_turb, PSD_vibration):
     PSD_vib_1= np.zeros_like(PSD_atmo_turb)
     m = min(PSD_vibration.shape[0], PSD_vib_1.shape[0])
     PSD_vib_1[:m, :] = PSD_vibration[:m, :]
-    
+
     return PSD_vib_1  
 
 
@@ -578,79 +578,77 @@ def final_andes_optical_gain (file_mod0, file_mod4, target_seeing, target_modula
     return interp_gain_cut_transp
 
 
-# ############
-# ############
+############
+############
 
-# ########### VERSION 1
+########### VERSION 1
 
+# SOUL optical gain data is stored in a single FITS file as a 3D data cube,
+# with axes for modulated modes, binning, and magnitudes.
 
-
-# # SOUL optical gain data is stored in a single FITS file as a 3D data cube,
-# # with axes for modulated modes, binning, and magnitudes.
-
-# def _load_soul_gain_cube(file_soul_optical_gain_cube):
-#     """
-#     Loads the SOUL optical gain data cube and its axes from a single FITS file.
-#     """
-#     with fits.open(file_soul_optical_gain_cube) as hdul:
-#         magnitudes = hdul[1].data     # Shape: (11,)               # pylint: disable=E1101 
-#         binning = hdul[2].data        # Shape: (4,)                # pylint: disable=E1101 
-#         mod_modes = hdul[3].data        # Shape: (6,)                # pylint: disable=E1101 
-#         gain_cube = hdul[4].data      # Shape: (6, 4, 11)          # pylint: disable=E1101 
-        
-#     return mod_modes, binning, magnitudes, gain_cube
+def _load_soul_gain_cube(file_soul_optical_gain_cube):
+    """
+    Loads the SOUL optical gain data cube and its axes from a single FITS file.
+    """
+    with fits.open(file_soul_optical_gain_cube) as hdul:
+        magnitudes = hdul[1].data     # Shape: (11,)               # pylint: disable=E1101 
+        binning = hdul[2].data        # Shape: (4,)                # pylint: disable=E1101 
+        mod_modes = hdul[3].data      # Shape: (6,)                # pylint: disable=E1101 
+        gain_cube = hdul[4].data      # Shape: (6, 4, 11)          # pylint: disable=E1101 
+    
+    return mod_modes, binning, magnitudes, gain_cube
 
  
-# # SOUL optical gain is computed by performing a 2D interpolation over binning and magnitudes.
+# SOUL optical gain is computed by performing a 2D interpolation over binning and magnitudes.
 
-# def compute_soul_optical_gain(file_soul_optical_gain_cube, 
-#                               target_binning, target_magnitude):
-#     """
-#     Computes the optical gain for the SOUL system using 3D interpolation.
-#     Axes order must match the data cube shape: (mod_modes, binning, magnitudes).
-#     """
-#     mod_modes, binning, magnitudes, gain_cube = _load_soul_gain_cube(file_soul_optical_gain_cube)
+def compute_soul_optical_gain_1(file_soul_optical_gain_cube, 
+                              target_binning, target_magnitude):
+    """
+    Computes the optical gain for the SOUL system using 3D interpolation.
+    Axes order must match the data cube shape: (mod_modes, binning, magnitudes).
+    """
+    mod_modes, binning, magnitudes, gain_cube = _load_soul_gain_cube(file_soul_optical_gain_cube)
     
-#     n_modes = len(mod_modes)
-#     interpolated_gain = np.zeros(n_modes)
+    n_modes = len(mod_modes)
+    interpolated_gain = np.zeros(n_modes)
 
-#     for i in range(n_modes):
+    for i in range(n_modes):
 
-#         interp = RegularGridInterpolator((binning, magnitudes), 
-#                                          gain_cube[i, :, :], 
-#                                          bounds_error=False, 
-#                                          fill_value=None)
+        interp = RegularGridInterpolator((binning, magnitudes), 
+                                         gain_cube[i, :, :], 
+                                         bounds_error=False, 
+                                         fill_value=None)
 
-#         point = np.array([target_binning, target_magnitude])
-#         interpolated_gain[i] = interp(point)
+        point = np.array([target_binning, target_magnitude])
+        interpolated_gain[i] = interp(point)
     
-#     print("SOUL INTERPOLATED OPTICAL GAIN:",interpolated_gain)
-#     print("SOUL INTERPOLATED OPTICAL GAIN SHAPE:",interpolated_gain.shape)
+    print("SOUL INTERPOLATED OPTICAL GAIN:",interpolated_gain)
+    print("SOUL INTERPOLATED OPTICAL GAIN SHAPE:",interpolated_gain.shape)
     
-#     return interpolated_gain, mod_modes
+    return interpolated_gain, mod_modes
 
     
-# # Function to interpolate the resulting optical gain values from the original modal values, 
-# # over the target modal values (defined by the number of actuators) and reshape the resulting
-# # interp_gain_final to match the PSD dimensions and avoid broadcasting issues.
+# Function to interpolate the resulting optical gain values from the original modal values, 
+# over the target modal values (defined by the number of actuators) and reshape the resulting
+# interp_gain_final to match the PSD dimensions and avoid broadcasting issues.
 
-# def final_soul_optical_gain (file_soul_optical_gain_cube, target_binning, 
-#                              target_magnitude, actuators_number):
+def final_soul_optical_gain_1(file_soul_optical_gain_cube, target_binning, 
+                             target_magnitude, actuators_number):
     
-#     interp_gain, m_modes = compute_soul_optical_gain(file_soul_optical_gain_cube, 
-#                                                      target_binning, target_magnitude)
+    interp_gain, m_modes = compute_soul_optical_gain_1(file_soul_optical_gain_cube, 
+                                                     target_binning, target_magnitude)
     
-#     target_modes = np.arange(actuators_number)
+    target_modes = np.arange(actuators_number)
     
-#     interp_gain_final = interpolate_vector(target_modes, m_modes, interp_gain)
+    interp_gain_final = interpolate_vector(target_modes, m_modes, interp_gain)
     
-#     # Reshape of interp_gain_final
-#     interp_gain_final = interp_gain_final.reshape(len(interp_gain_final), 1)
+    # Reshape of interp_gain_final
+    interp_gain_final = interp_gain_final.reshape(len(interp_gain_final), 1)
     
-#     print("SOUL INTERPOLATED FINAL OPTICAL GAIN:",interp_gain_final)
-#     print("SOUL INTERPOLATED FINAL OPTICAL GAIN SHAPE:",interp_gain_final.shape)
+    #print("SOUL INTERPOLATED FINAL OPTICAL GAIN version 1:",interp_gain_final)
+    #print("SOUL INTERPOLATED FINAL OPTICAL GAIN SHAPE version 1:",interp_gain_final.shape)
     
-#     return interp_gain_final
+    return interp_gain_final
     
   
 ############  VERSION 2
@@ -678,8 +676,8 @@ def _load_soul_gain_grid(file_mod0_soul, file_mod3_soul):
 # Uses an optical gain grid from SOUL_og_mod0.fits and SOUL_og_mod3.fits and performs
 # a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
 
-def compute_soul_optical_gain(file_mod0, file_mod3, target_seeing, 
-                              target_modulation_radius):
+def compute_soul_optical_gain_2(file_mod0, file_mod3, target_seeing, 
+                                target_modulation_radius):
     """
     Computes the optical gain for the SOUL system using 2D interpolation.
     Axes: modulation radius, seeing.
@@ -703,17 +701,17 @@ def compute_soul_optical_gain(file_mod0, file_mod3, target_seeing,
 
 # Reshape the interpolated optical gain to match the PSD dimensions and avoid broadcasting issues
     
-def final_soul_optical_gain (file_mod0, file_mod3, target_seeing, target_modulation_radius, 
+def final_soul_optical_gain_2(file_mod0, file_mod3, target_seeing, target_modulation_radius, 
                              actuators_number):
     
-    interp_gain = compute_soul_optical_gain(file_mod0, file_mod3, target_seeing, 
-                                            target_modulation_radius)
+    interp_gain = compute_soul_optical_gain_2(file_mod0, file_mod3, target_seeing, 
+                                              target_modulation_radius)
 
     interp_gain_cut = interp_gain[:, :actuators_number]
     interp_gain_cut_transp = interp_gain_cut.T
     
-    print("SOUL INTERPOLATED FINAL OPTICAL GAIN:",interp_gain_cut_transp)
-    print("SOUL INTERPOLATED FINAL OPTICAL GAIN SHAPE:",interp_gain_cut_transp.shape)
+    #print("SOUL INTERPOLATED FINAL OPTICAL GAIN version 2:",interp_gain_cut_transp)
+    #print("SOUL INTERPOLATED FINAL OPTICAL GAIN SHAPE version 2:",interp_gain_cut_transp.shape)
     
     return interp_gain_cut_transp
 
@@ -1005,7 +1003,8 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
 
 def interpolate_vector(x_interpolation, x_original, vector_original):
     
-    vector_interpolated = np.interp (x_interpolation, x_original, vector_original, left = 0, right = 0) 
+    vector_interpolated = np.interp (x_interpolation, x_original, vector_original, 
+                                     left = 0, right = 0) 
     
     return vector_interpolated
 
@@ -1024,11 +1023,11 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
     Omega_freqs_original = 2 * np.pi * freqs_original
     
     n_modes_available = min(actuators_number, PSD_original.shape[0])
-
+    
     for i in range(n_modes_available):
 
-        PSD_interpolated[i, :] = interpolate_vector(freqs_interpolation, freqs_original, PSD_original[i, :])
-
+        PSD_interpolated[i, :] = interpolate_vector(Omega_freqs_interpolation, Omega_freqs_original, PSD_original[i, :])
+        
         sigma2[i] = integrate.simpson(PSD_original[i, :], Omega_freqs_original)
         sigma2_interp[i] = integrate.simpson(PSD_interpolated[i, :], Omega_freqs_interpolation)
 
