@@ -35,7 +35,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     wind_direction = 0.0
     wind_speed = param['atmosphere']['wind_speed']
     seeing = param['atmosphere']['seeing']
-    r0 = 0.98 * 500 / seeing
+    r0 = 0.9759 * 0.5/(seeing*4.848)
 
     F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
     sky_background = param['wavefront_sensor']['sky_backgr']
@@ -58,7 +58,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     temporal_freqs = np.logspace(-3, np.log10(frame_rate / 2.0), 1000)
     omega = 2 * np.pi * temporal_freqs
 
-    spatial_freqs = np.logspace(-4, 4, 100)
+    spatial_freqs = np.logspace(-4, 4, 300)
 
     T_tot = param['control']['total_delay']
     modulation_radius = param['wavefront_sensor']['modulation_radius']
