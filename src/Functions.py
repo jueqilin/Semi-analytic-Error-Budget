@@ -55,8 +55,12 @@ def load_parameters(yaml_file):
 # Function to compute r0 from seeing
 
 def seeing_to_r0(seeing, wavelength=500e-9):
+    """
+    Converts atmospheric seeing (in arcseconds) to Fried parameter r0 (in meters).
+    """
     
-    r0 = 0.9759 * wavelength / (seeing * 4.848e-6)
+    seeing_rad = np.deg2rad(seeing / 3600.0)
+    r0 = 0.9759 * wavelength / seeing_rad
     return r0
 
 

@@ -37,6 +37,7 @@ from src.Functions import (
     PSD_final_alias,
     read_sigma_slopes,
     resize_psd_like,
+    seeing_to_r0,
     total_variance,
     transfer_funct,
 )
@@ -136,6 +137,34 @@ class TestFuncOut(unittest.TestCase):
         PSD = np.array([1.0, 2.0])
         np.testing.assert_array_almost_equal(np.imag(func_out(H, PSD)), [0.0, 0.0])
 
+
+# ---------------------------------------------------------------------------
+# seeing_to_r0
+# ---------------------------------------------------------------------------
+
+class TestSeeingToR0(unittest.TestCase):
+    """seeing_to_r0 converts seeing in arcsec to the Fried parameter r0 in meters."""
+
+    def test_typical_seeing_value(self):
+        # A seeing of 1.0 arcsec at 500 nm corresponds to about 0.1006 m
+        # (using r0 = 0.976 * lambda / seeing_rad)
+        r0 = seeing_to_r0(1.0, wavelength=500e-9)
+        self.assertAlmostEqual(r0, 0.10064, places=4)
+
+    def test_scales_inversely_with_seeing(self):
+        # Doubling the seeing should halve r0
+        r0_good_seeing = seeing_to_r0(0.5)
+        r0_bad_seeing = seeing_to_r0(1.0)
+        self.assertAlmostEqual(r0_good_seeing / r0_bad_seeing, 2.0, places=10)
+
+    def test_scales_linearly_with_wavelength(self):
+        # Doubling the wavelength should double r0
+        r0_500nm = seeing_to_r0(1.0, wavelength=500e-9)
+        r0_1000nm = seeing_to_r0(1.0, wavelength=1000e-9)
+        self.assertAlmostEqual(r0_1000nm / r0_500nm, 2.0, places=10)
+        
+    def test_positive_value(self):
+        self.assertGreater(seeing_to_r0(0.8), 0.0)
 
 # ---------------------------------------------------------------------------
 # integrate_function
