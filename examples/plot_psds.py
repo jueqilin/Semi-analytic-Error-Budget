@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from src.Functions import (
     DEFAULT_ALIASING_ALPHA,
     load_parameters,
+    seeing_to_r0,
     turbulence_psd,
     temporal_variance,
     aliasing_variance,
@@ -35,7 +36,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     wind_direction = 0.0
     wind_speed = param['atmosphere']['wind_speed']
     seeing = param['atmosphere']['seeing']
-    r0 = 0.9759 * 0.5/(seeing*4.848)
+    r0 = seeing_to_r0(seeing)
 
     F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
     sky_background = param['wavefront_sensor']['sky_backgr']

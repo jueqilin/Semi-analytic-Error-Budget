@@ -52,6 +52,14 @@ def load_parameters(yaml_file):
             raise FileNotFoundError from exc
 
 
+# Function to compute r0 from seeing
+
+def seeing_to_r0(seeing, wavelength=500e-9):
+    
+    r0 = 0.9759 * wavelength / (seeing * 4.848e-6)
+    return r0
+
+
 # Function to compute the maximum radial order from the total number of corrected modes 
 
 def radial_order_from_n_modes(n_modes):

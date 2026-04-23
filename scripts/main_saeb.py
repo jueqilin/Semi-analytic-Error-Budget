@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.Functions import seeing_to_r0
 from src.Functions import aliasing_variance
 from src.Functions import build_transfer_function
 from src.Functions import compute_andes_optical_gain
@@ -140,7 +141,7 @@ def run(yaml_file):
     wind_direction = 0.0
     wind_speed = param['atmosphere']['wind_speed']
     seeing_ = param['atmosphere']['seeing']
-    fried_param = 0.98 * 500 / seeing_
+    fried_param = seeing_to_r0(seeing_)
 
     rho = 0
     theta = 0

@@ -10,6 +10,7 @@ Created on Fri Nov 14 15:17:28 2025
 
 import numpy as np 
 
+from src.Functions import seeing_to_r0
 from src.Functions import turbulence_psd
 from src.Functions import funct_d2
 from src.Functions import total_variance
@@ -47,7 +48,7 @@ layers_altitude = 0.0
 wind_direction = 0.0
 wind_speed = param['atmosphere']['wind_speed']
 seeing = param['atmosphere']['seeing']
-fried_param = 0.98 * 500 / seeing
+fried_param = seeing_to_r0(seeing)
 
 rho = 0
 theta = 0
