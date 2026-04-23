@@ -80,13 +80,16 @@ class TestFittingVariance(unittest.TestCase):
 
     @staticmethod
     def _formula(coeff, n_act, D, r0):
-        return coeff * n_act ** (-0.9) * (D / r0) ** (5 / 3)
+        wavelength = 500e-9  # Reference wavelength for r0 in meters
+        rad2_to_nm2 = (wavelength * 1e9 / (2 * np.pi)) ** 2
+        return coeff * n_act ** (-0.9) * (D / r0) ** (5 / 3) * rad2_to_nm2
 
     def test_unit_inputs_return_coefficient(self):
         # With N=1, D=1, r0=1 the formula reduces to just 'coeff'
+        rad2_to_nm2 = (500e-9 * 1e9 / (2 * np.pi)) ** 2
         for coeff in (0.1, 0.2778, 1.0):
             self.assertAlmostEqual(
-                fitting_variance(coeff, 1, 1.0, 1.0), coeff, places=12
+                fitting_variance(coeff, 1, 1.0, 1.0), coeff * rad2_to_nm2, places=12
             )
 
     def test_matches_analytical_formula(self):

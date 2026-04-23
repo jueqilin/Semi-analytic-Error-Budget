@@ -367,13 +367,24 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
 
 
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
-# for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019)
+# for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019).
+# The analytical formula yields rad^2; the function converts it to nm^2 to match the other terms.
 
-def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0):
+def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wavelength=500e-9):
+    """
+    Calculates the Fitting Error variance and converts it from rad^2 to nm^2.
+    """
+    # Variance in rad^2
+    var_fitting_rad2 = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter / r0) ** (5/3)
     
-    var_fitting = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter/r0) ** (5/3)
-    print("Fitting:", var_fitting)
-    return var_fitting
+    # Conversion factor from rad^2 to nm^2
+    rad2_to_nm2 = (wavelength * 1e9 / (2 * np.pi)) ** 2
+    
+    # Variance in nm^2
+    var_fitting_nm2 = var_fitting_rad2 * rad2_to_nm2
+    
+    print(f"Fitting variance: {var_fitting_nm2:.2f} nm^2")
+    return var_fitting_nm2
 
 
 # Funtion to compute the output PSD by multiplying the squared modulus of the transfert function with the
