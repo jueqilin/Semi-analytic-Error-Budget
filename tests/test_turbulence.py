@@ -40,7 +40,7 @@ _P3_INI_8M = os.path.join(_P3_REPO_ROOT, "tests", "scao_test_wvl1100nm.ini")
 
 # ── Shared Physics Parameters ────────────────────────────────────────────────
 _VERBOSE = True
-_DISPLAY = False
+_DISPLAY = True
 
 _D = 8.222                  # Telescope diameter [m]
 _R0 = 0.15                  # Fried parameter [m] at 500 nm

@@ -26,6 +26,8 @@ from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
 from src.Functions import measure_variance
 from src.Functions import vibration_variance
+from src.Functions import seeing_to_r0
+from src.Functions import PSD_conversion
 
 from src.plots import plot_total_variance_mode_0
 from src.plots import plot_all_PSD
@@ -64,7 +66,7 @@ layers_altitude = 0.0
 wind_direction = 0.0
 wind_speed = param['atmosphere']['wind_speed']
 seeing = param['atmosphere']['seeing']
-fried_param = 0.98 * 500 / seeing
+fried_param = seeing_to_r0(seeing)
 
 rho = 0
 theta = 0
@@ -163,7 +165,7 @@ x_pixel = param['control']['slope_computer_weights']
 if system == "ANDES":    
 
     c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                  modulation_radius, n_actuators)
+                                      modulation_radius, n_actuators)
 elif system =="SOUL":
     
     c_optg = final_soul_optical_gain_2(file_optg[0], file_optg[1], seeing, 
@@ -176,9 +178,7 @@ else:
 
 ###########
 ##########
-
-
-
+  
 
 
 
@@ -187,10 +187,6 @@ display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
 
-# PSD_wind_vib conversion
-PSD_wind_vib = PSD_wind_vib/(2 * np.pi)
-
-
 if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):                                     
     
     raise RuntimeError("PSD windshake or corresponding frequencies not loaded") 
@@ -198,6 +194,7 @@ if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is N
 print("PSD windshake and corresponding frequencies loaded successfully.")
 
 
+PSD_wind_vib = PSD_conversion(PSD_wind_vib)
 
 PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_param, outer_scale,
                             layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs)

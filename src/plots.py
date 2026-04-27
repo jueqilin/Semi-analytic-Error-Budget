@@ -143,7 +143,7 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
 def plot(f, H_r_t, H_n_m, H_n_a, PSD_in_v, PSD_out_v, PSD_in_t, PSD_out_t, PSD_in_m, PSD_out_m, PSD_in_a, PSD_out_a):
     
     PSD_in = [PSD_in_v, PSD_in_t, PSD_in_m, PSD_in_a]                  
-    PSD_out = [PSD_in_v, PSD_out_t, PSD_out_m, PSD_out_a]              
+    PSD_out = [PSD_out_v, PSD_out_t, PSD_out_m, PSD_out_a]              
     H = [H_r_t, H_r_t, H_n_m, H_n_a]
        
     labels_PSD = ["vibr", "temp", "meas","alias"]
@@ -670,10 +670,11 @@ def plot_psd_vibr_soul (file_path_wind):
     freq, PSD_vibr = load_PSD_windshake(file_path_wind)
     
     PSD_vibr = PSD_vibr/(2 * np.pi)
-    freq = 2 * np.pi * freq
    
-    print ("PSD_shape:", PSD_vibr.shape)
-    print ("Freq_shape:", freq.shape)
+    freq = 2 * np.pi * freq
+  
+    #print ("PSD_shape:", PSD_vibr.shape)
+    #print ("Freq_shape:", freq.shape)
     
     plt.loglog(freq, PSD_vibr[0,:], label = "psd vibrations mode 0")  
        
@@ -684,8 +685,7 @@ def plot_psd_vibr_soul (file_path_wind):
     plt.legend()
     plt.show()
     
-
-    
+ 
 # Function to compare the optical gain values obtained from version 1 and version 2 
 # of the final_soul_optical_gain function.
 

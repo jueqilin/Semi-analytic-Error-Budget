@@ -44,6 +44,18 @@ def load_parameters(yaml_file):
             raise FileNotFoundError from exc
 
 
+# Function to compute r0 from seeing
+
+def seeing_to_r0(seeing, wavelength=500e-9):
+    """
+    Converts atmospheric seeing (in arcseconds) to Fried parameter r0 (in meters).
+    """
+    
+    seeing_rad = np.deg2rad(seeing / 3600.0)
+    r0 = 0.9759 * wavelength / seeing_rad
+    return r0
+
+
 # Function to compute the maximum radial order from the total number of corrected modes 
 
 def radial_order_from_n_modes(n_modes):
@@ -343,14 +355,33 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     return PSD_atmo
 
 
+# Function to convert a PSD from nm^2/Hz to nm^2/(rad/s)
+
+def PSD_conversion (PSD_to_convert):
+    
+    PSD = PSD_to_convert/(2 * np.pi)
+    
+    return PSD
+
+
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019)
 
-def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0):
+def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wavelength=500e-9):
+    """
+    Calculates the Fitting Error variance and converts it from rad^2 to nm^2.
+    """
+    # Variance in rad^2
+    var_fitting_rad2 = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter / r0) ** (5/3)
     
-    var_fitting = fitting_coeff * actuators_number ** (-0.9) * (telescope_diameter/r0) ** (5/3)
-    print("Fitting:", var_fitting)
-    return var_fitting
+    # Conversion factor from rad^2 to nm^2
+    rad2_to_nm2 = (wavelength * 1e9 / (2 * np.pi)) ** 2
+    
+    # Variance in nm^2
+    var_fitting_nm2 = var_fitting_rad2 * rad2_to_nm2
+    
+    print(f"Fitting variance: {var_fitting_nm2:.2f} nm^2")
+    return var_fitting_nm2
 
 
 # Funtion to compute the output PSD by multiplying the squared modulus of the transfert function with the
@@ -622,8 +653,8 @@ def compute_soul_optical_gain_1(file_soul_optical_gain_cube,
         point = np.array([target_binning, target_magnitude])
         interpolated_gain[i] = interp(point)
     
-    print("SOUL INTERPOLATED OPTICAL GAIN:",interpolated_gain)
-    print("SOUL INTERPOLATED OPTICAL GAIN SHAPE:",interpolated_gain.shape)
+    #print("SOUL INTERPOLATED OPTICAL GAIN:",interpolated_gain)
+    #print("SOUL INTERPOLATED OPTICAL GAIN SHAPE:",interpolated_gain.shape)
     
     return interpolated_gain, mod_modes
 
