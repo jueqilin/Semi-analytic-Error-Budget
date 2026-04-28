@@ -3,9 +3,10 @@
 """
 Created on 2026-04-16 14:03
 
+Utility functions for control system calculations
+
 @author: Jueqi Lin
 """
-
 
 import os
 import numpy as np
@@ -32,8 +33,6 @@ def control_CL_tf_margin(
         ctrl_num = np.column_stack((gain, np.zeros((actuators_number, 1), dtype=float)))
         ctrl_den[:] = [1, -1]
     elif controller_num is not None and controller_den is not None:
-        # ctrl_num = controller_num
-        # ctrl_den = controller_den
         ctrl_num = np.array(controller_num, dtype=float, copy=True)
         ctrl_den = np.array(controller_den, dtype=float, copy=True)
     else:
@@ -93,19 +92,13 @@ def control_CL_tf_margin(
         H_r_is_stable[i] = all(np.abs(H_r_tf[i].poles()) < 1)
         
         sensitivity_penalty[i] = ct.dcgain(H_r_tf[i])
-        print(f"sensitivity_penalty {i}: {sensitivity_penalty[i]}")        
+        # print(f"sensitivity_penalty {i}: {sensitivity_penalty[i]}")        
         
-        # 
-        # if ct.dcgain(H_n_tf[i]) < 0.5: 
         try:
             bw_n = ct.bandwidth(H_n_tf[i])
         except Exception:  # if bandwidth cannot be computed, set it to infinity
             bw_n = 1e-5             # bw_r = float('inf')
         bandwidth_Hn[i] = bw_n
-        # if np.isinf(bw_n) and np.isinf(bw_r):
-        #     zero_gain_penalty[i] = 1e9
-        # else:
-        #     zero_gain_penalty[i] = 0  
          
     return {
         "ctrl_tf": 
@@ -167,7 +160,11 @@ def cost(obj_to_optimize,
     
     ctrl_tf = result_control_CL_tf["ctrl_tf"]
     H_ol_margins = result_control_CL_tf["H_ol_margins"]
-    H_ol_sm = H_ol_margins[2]
+    
+    H_ol_gm = H_ol_margins[0]
+    H_ol_pm = H_ol_margins[1]
+    H_ol_sm = H_ol_margins[2]    
+    
     CL_stability = result_control_CL_tf["CL_stability"]
 
     bandwidth_Hn = result_control_CL_tf["bandwidth_Hn"]
@@ -206,11 +203,16 @@ def cost(obj_to_optimize,
     else:
         stability_penalty = 0
     
-    sm_target = 0.7 # Target stability margin (example value)
+    sm_target = 0.5 # Target stability margin (example value)
     sm_penalty = np.maximum(0, sm_target - H_ol_sm)  # Penalty for not meeting stability margin target
-    sm_penalty = np.sum(sm_penalty)  # Sum penalty across all actuators
+    sm_penalty = np.sum(sm_penalty) ** 2 # Sum penalty across all actuators
     
-    close_loop_peak_penalty_sum = np.sum(cl_peak_penalty)
+    cl_peak_penalty = np.sum(cl_peak_penalty) ** 2
+    
+    gm_target = 6 
+    gm_penalty = np.maximum(0, gm_target - H_ol_gm)
+    gm_penalty = np.sum(sm_penalty) ** 2
+    
     
     """
     cost function = cost_variance + penalty for stability + margin to ensure stability
@@ -220,8 +222,8 @@ def cost(obj_to_optimize,
     margin to ensure stability = a large number * (max(0, target stability margin - actual stability margin));
     """
     
-    # cost_function = cost_variance + stability_penalty + sm_penalty
-    cost_function = np.sum(cost_variance) + stability_penalty + sm_penalty*1e3 + close_loop_peak_penalty_sum*1e2
+    # cost_function = cost_variance + stability_penalty + sm_penalty + close_loop_peak_penalty
+    cost_function = np.sum(cost_variance) + stability_penalty + sm_penalty*1e2 + cl_peak_penalty*1e2 + gm_penalty*1e5
     print(f"Total cost: {cost_function}, Cost variance: {cost_variance}, Stability penalty: {stability_penalty}, Stability margin penalty: {sm_penalty}")
     
     return [cost_function, cost_variance_result, stability_penalty, sm_penalty, H_r_tf, H_n_tf, cl_peak_penalty]

@@ -111,29 +111,14 @@ def initial(param_dir = 'params_mod4.yaml'):
     
     # 3. Build Transfer Functions for mode 0 (as an example)
     mode_index = 0    
-    # The plant (WFS * Reconstructor+Delay * DM) is represented by its pre-multiplied polynomials
     
-    # plant_tf = np.array(n_actuators,dtype=object)
-    # for i in n_actuators:
-    #     plant_W_tf[i] = ct.tf(n1[i,:] , d1[i] , t_0)
-    #     plant_R_tf = ct.tf(n2, d2, t_0)
-    #     plant_M_tf = ct.tf(n3, d3, t_0)
-    #     plant_tf = ct.series(plant_W_tf, plant_R_tf, plant_M_tf)
+    # The plant (WFS * Reconstructor+Delay * DM) is represented by its pre-multiplied polynomials
     plant_W_tf = ct.tf(n1, d1, t_0)
     plant_R_tf = ct.tf(n2, d2, t_0)
     plant_M_tf = ct.tf(n3, d3, t_0)
     plant_tf = ct.series(plant_W_tf, plant_R_tf, plant_M_tf)
     plant_num = plant_tf.num[mode_index][mode_index]
     plant_den = plant_tf.den[mode_index][mode_index]
-    
-    # H_r, H_n = build_transfer_function(
-    #     omega,
-    #     t_0,
-    #     n_actuators,
-    #     plant_num,
-    #     plant_den,
-    #     gain=gain_array,
-    # )
 
     # 4. Compute Optical Gain (needed for aliasing)
     c_optg = compute_andes_optical_gain(file_mod0=file_mod0,
@@ -142,44 +127,7 @@ def initial(param_dir = 'params_mod4.yaml'):
                                         modulation_radius=modulation_radius,
                                         actuators_number=n_actuators)
     
-    # # 5. Compute error budget components
-    # _, variance_vibr_CL, PSD_out_temp, PSD_in_temp = temporal_variance(
-    #     PSD_atmosf, PSD_vibration_zeros, H_r, n_actuators, omega
-    # )
-    
-    # _, variance_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(
-    #     transf_funct=H_n,
-    #     actuators_number=n_actuators,
-    #     omega_temp_freq_interval=omega,
-    #     c_optg=c_optg,
-    #     alpha=alpha_,
-    #     telescope_diameter=D,
-    #     seeing=seeing,
-    #     modulation_radius=modulation_radius,
-    #     windspeed=wind_speed,
-    #     maximum_radial_order_corrected=maximum_radial_order,
-    #     file_path_matrix_R=file_path_R1,
-    #     file_path_sigma_slopes=sigma_slopes_path
-    # )
-
-    # _, variance_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
-    #     F_excess=F_excess_noise,
-    #     pixel_pos=x_pixel,
-    #     sky_bkg=sky_background,
-    #     dark_curr=dark_current,
-    #     read_out_noise=readout_noise,
-    #     photon_flux=phot_flux,
-    #     telescope_diameter=D,
-    #     frame_rate=frame_rate,
-    #     magnitudo=magnitude,
-    #     n_subaperture=n_subapert,
-    #     collecting_area=collecting_area,
-    #     file_path_matrix_R=file_path_R1,
-    #     omega_temp_freq_interval=omega,
-    #     transf_funct=H_n,
-    #     actuators_number=n_actuators,
-    #     c_optg=c_optg
-    # )
+    # 5. initialize the optimization context for single mode control optimization
     
     # fitting variance
     static_fit_variance = fitting_variance(
@@ -188,9 +136,7 @@ def initial(param_dir = 'params_mod4.yaml'):
         telescope_diameter=D, 
         r0=r0)
     
-    # initialize the optimization context for single mode control optimization
     # obj_to_optimize is an instance of SingleModeControllerOptimizationContext
-    
     obj_to_optimize = prepare_single_mode_control_optimization(
         mode_index=mode_index,
         omega_temp_freq_interval=omega,
@@ -225,13 +171,7 @@ def initial(param_dir = 'params_mod4.yaml'):
         den3=d3,
     )
     
-    # evaluate function just for one mode!!!  
-    
-    # compute nominal cost with nominal gain array
-    gain_nominal = np.ones_like(gain_array)
-    
-    print(n1,n2,n3,d1,d2,d3)
-    
+    # generate the system with the initial controller (without optimization)   
     res_cost_no_opti, res_evaluate_no_opti, _, _, _, _, _ = cost(obj_to_optimize, 
         actuators_number=n_actuators,
         WFS_num=n1,
@@ -244,6 +184,9 @@ def initial(param_dir = 'params_mod4.yaml'):
         controller_num = None, 
         controller_den = None)    
     
+    # 6. Optimization
+    # evaluate function just for one mode!!!  
+    # build up the cost function to be optimized with dual_annealing method
     opti_cost_func = lambda x: cost(obj_to_optimize,
                                 actuators_number=n_actuators,
                                 WFS_num=n1,
@@ -255,16 +198,19 @@ def initial(param_dir = 'params_mod4.yaml'):
                                 gain = x,
                                 controller_num = None, 
                                 controller_den = None)[0]  
-    opti_bounds = [(0, 10) for _ in range(len(gain_array))]  # Example bounds for each gain parameter
+    opti_bounds = [(0, 2) for _ in range(len(gain_array))]  # Example bounds for each gain parameter
     res_opti_dual_annealing = dual_annealing(opti_cost_func, opti_bounds, maxiter=100, seed=50)
-    # dual_annealing
+    
+    print()
+    print()  
     print("=========before optimization============")
     print("plant num and den:", plant_num, plant_den)
     print("Total cost result:", res_cost_no_opti)
-    print("Evaluation result:", res_evaluate_no_opti[0].variance_terms)
-    print("Evaluation result:", res_evaluate_no_opti[1].variance_terms)
-    print("Gain array:", gain_array)    
+    print("Evaluation result (variance terms):", res_evaluate_no_opti[0].variance_terms)
+    print("Initial Gain array:", gain_array)
     
+    print()
+    print() 
     print("=========Optimization============")
     print("Optimal gain array found:", res_opti_dual_annealing.x)
     
@@ -280,10 +226,11 @@ def initial(param_dir = 'params_mod4.yaml'):
         controller_num = None, 
         controller_den = None)
     
+    print()
+    print()  
     print("============ After Optimization ===========") 
     print("Total cost result:", res_cost_optimized)
     print("Optimized evaluation result:", res_evaluate_optimized[0].variance_terms, res_evaluate_optimized[1].variance_terms)
-    # print("Optimized evaluation result:", res_evaluate_optimized[1].variance_terms)
     
     print("Optimized stability penalty:", stability_penalty)
     print("Optimized stability margin penalty:", stability_margin_penalty)
@@ -296,9 +243,8 @@ def initial(param_dir = 'params_mod4.yaml'):
     print('H_n_tf:',H_n_tf[0])
     
     
-    
+    # 7. Plotting
     # bode figure for the transfer functions
-    
     fig1, ax3 = bodeplot_Hz(
     transfer_functions_ct=H_n_tf[mode_index],
     omega_limits=[1e-5,frame_rate/2],
@@ -406,38 +352,11 @@ def initial(param_dir = 'params_mod4.yaml'):
     plt.legend(loc='lower left', fontsize=11)
 
     plt.tight_layout()
-  
  
     plt.show()
     
     return obj_to_optimize
  
-
-    
-    
-# def cost(obj_to_optimize, controller_num, controller_den):
-# # obj_to_optimize is an instance of SingleModeControlOptimization
-
-#     cost_variance_result = obj_to_optimize.evaluate(
-#         controller_num=controller_num, 
-#         controller_den=controller_den, 
-#         store_history=True)
-#     cost_variance = cost_variance_result.cost
-    
-#     """
-#     cost function = cost_variance + penalty for stability + margin to ensure stability
-#     where
-#     cost_variance = variance_vibr_CL + variance_alias_CL + variance_meas_CL;
-#     penalty for stability = 0 if stable, else a large number;
-#     margin to ensure stability = H_r_cost_penalty * (max real part of poles of closed-loop system);
-#     """
-#     if    
-#     H_r_cost_penalty = 
-#     H_n_cost_penalty = 
-#     cost_penalty = H_r_cost_penalty + H_n_cost_penalty
-#     cost_total = cost_variance + cost_penalty
-    
-#     return cost_total
 
 if __name__ == "__main__":
     obj_to_optimize = initial(param_dir = 'params_mod4.yaml')
