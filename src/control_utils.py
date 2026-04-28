@@ -8,7 +8,6 @@ Utility functions for control system calculations
 @author: Jueqi Lin
 """
 
-import os
 import numpy as np
 import control as ct
 
@@ -97,7 +96,7 @@ def control_CL_tf_margin(
         try:
             bw_n = ct.bandwidth(H_n_tf[i])
         except Exception:  # if bandwidth cannot be computed, set it to infinity
-            bw_n = 1e-5             # bw_r = float('inf')
+            bw_n = 1e-6             # bw_r = float('inf')
         bandwidth_Hn[i] = bw_n
          
     return {
@@ -115,7 +114,7 @@ def control_CL_tf_margin(
             [H_n_is_stable, H_r_is_stable],
         "sensitivity_penalty":
             sensitivity_penalty,
-        "bandwidth_Hn":
+        "bandwidth_H_n":
             bandwidth_Hn}
 
 def cost(obj_to_optimize, 
@@ -167,7 +166,7 @@ def cost(obj_to_optimize,
     
     CL_stability = result_control_CL_tf["CL_stability"]
 
-    bandwidth_Hn = result_control_CL_tf["bandwidth_Hn"]
+    bandwidth_H_n = result_control_CL_tf["bandwidth_H_n"]
 
     H_n_tf = result_control_CL_tf["H_n_tf"]
     H_r_tf = result_control_CL_tf["H_r_tf"]
@@ -179,10 +178,12 @@ def cost(obj_to_optimize,
     # cost_variance_result = []
     cost_variance = np.zeros(actuators_number, dtype=float)
     cost_variance_result = np.zeros(actuators_number, dtype=object)
-    cl_peak_penalty = np.zeros(actuators_number, dtype=float)
+    H_n_peak_penalty = np.zeros(actuators_number, dtype=float)
+    H_r_peak_penalty = np.zeros(actuators_number, dtype=float)
     
     # 
-    cl_peak_limitation = 2 # dB
+    H_n_peak_limitation = 3 # dB
+    H_r_peak_limitation = 2 # dB
     
     for i, ctrl_tf_i in enumerate(ctrl_tf):
         ctrl_num_evaluate[i] = ctrl_tf_i.num[0][0]
@@ -196,23 +197,24 @@ def cost(obj_to_optimize,
         cost_variance_result[i] = cost_variance_result_i
         cost_variance[i] = cost_variance_result_i.cost
         
-        cl_peak_penalty[i] = compute_close_loop_peak_penalty(H_n_tf[i], cl_peak_limitation)
+        H_n_peak_penalty[i] = compute_close_loop_peak_penalty(H_n_tf[i], H_n_peak_limitation)
+        H_r_peak_penalty[i] = compute_close_loop_peak_penalty(H_r_tf[i], H_r_peak_limitation)
     
     if not np.all(CL_stability):
         stability_penalty = 1e9  # A large penalty for instability
     else:
         stability_penalty = 0
     
-    sm_target = 0.5 # Target stability margin (example value)
+    sm_target = 0.65 # Target stability margin (example value)
     sm_penalty = np.maximum(0, sm_target - H_ol_sm)  # Penalty for not meeting stability margin target
     sm_penalty = np.sum(sm_penalty) ** 2 # Sum penalty across all actuators
     
-    cl_peak_penalty = np.sum(cl_peak_penalty) ** 2
+    H_n_tf_peak_penalty = np.sum(H_n_peak_penalty) ** 2
+    H_r_tf_peak_penalty = np.sum(H_r_peak_penalty) ** 2
     
-    gm_target = 6 
+    gm_target = 3 
     gm_penalty = np.maximum(0, gm_target - H_ol_gm)
-    gm_penalty = np.sum(sm_penalty) ** 2
-    
+    gm_penalty = np.sum(gm_penalty) ** 2    
     
     """
     cost function = cost_variance + penalty for stability + margin to ensure stability
@@ -223,10 +225,34 @@ def cost(obj_to_optimize,
     """
     
     # cost_function = cost_variance + stability_penalty + sm_penalty + close_loop_peak_penalty
-    cost_function = np.sum(cost_variance) + stability_penalty + sm_penalty*1e2 + cl_peak_penalty*1e2 + gm_penalty*1e5
+    weight_cost = np.array([1, 1, 1e1, 1e2, 1e3, 1e3],dtype=float)
+    cost_function = (np.sum(cost_variance) * weight_cost[0] 
+                    + stability_penalty * weight_cost[1]
+                    + sm_penalty * weight_cost[2]
+                    + H_n_tf_peak_penalty * weight_cost[3]
+                    + H_r_tf_peak_penalty * weight_cost[4]
+                    + gm_penalty * weight_cost[5])
     print(f"Total cost: {cost_function}, Cost variance: {cost_variance}, Stability penalty: {stability_penalty}, Stability margin penalty: {sm_penalty}")
     
-    return [cost_function, cost_variance_result, stability_penalty, sm_penalty, H_r_tf, H_n_tf, cl_peak_penalty]
+    # return [cost_function, cost_variance_result, stability_penalty, sm_penalty, H_r_tf, H_n_tf, H_n_tf_peak_penalty]
+    return {
+        "cost_function_value":
+            cost_function,
+        "total_variance":
+            cost_variance_result,
+        "penalty":
+            [stability_penalty, sm_penalty, H_n_tf_peak_penalty, H_r_tf_peak_penalty, gm_penalty],
+        "weight_penalty":
+            weight_cost,
+        "H_n_tf":
+            H_n_tf,
+        "H_r_tf":
+            H_r_tf,  
+        "H_ol_margins":
+            H_ol_margins,
+        "bandwidth_H_n":
+            bandwidth_H_n,
+    }
 
 def compute_close_loop_peak_penalty(
     H_cl_tf=None,

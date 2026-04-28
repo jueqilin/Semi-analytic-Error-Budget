@@ -171,8 +171,8 @@ def initial(param_dir = 'params_mod4.yaml'):
         den3=d3,
     )
     
-    # generate the system with the initial controller (without optimization)   
-    res_cost_no_opti, res_evaluate_no_opti, _, _, _, _, _ = cost(obj_to_optimize, 
+    # generate the system with the initial controller (without optimization)
+    res_cost_initial =  cost(obj_to_optimize, 
         actuators_number=n_actuators,
         WFS_num=n1,
         WFS_den=d1,
@@ -184,6 +184,10 @@ def initial(param_dir = 'params_mod4.yaml'):
         controller_num = None, 
         controller_den = None)    
     
+    cost_function_value_no_opti = res_cost_initial['cost_function_value']
+    evaluate_no_opti = res_cost_initial['total_variance']
+    
+
     # 6. Optimization
     # evaluate function just for one mode!!!  
     # build up the cost function to be optimized with dual_annealing method
@@ -197,24 +201,29 @@ def initial(param_dir = 'params_mod4.yaml'):
                                 RTC_den=d3, 
                                 gain = x,
                                 controller_num = None, 
-                                controller_den = None)[0]  
+                                controller_den = None)['cost_function_value']  
     opti_bounds = [(0, 2) for _ in range(len(gain_array))]  # Example bounds for each gain parameter
     res_opti_dual_annealing = dual_annealing(opti_cost_func, opti_bounds, maxiter=100, seed=50)
     
-    print()
+    print(type(evaluate_no_opti))
+    print(type(evaluate_no_opti[0]))
+    
     print()  
     print("=========before optimization============")
+    print()
     print("plant num and den:", plant_num, plant_den)
-    print("Total cost result:", res_cost_no_opti)
-    print("Evaluation result (variance terms):", res_evaluate_no_opti[0].variance_terms)
+    # modify
+    print("Cost function value:", cost_function_value_no_opti)
+    print("Evaluation result (variance terms):", evaluate_no_opti[0].variance_terms)
     print("Initial Gain array:", gain_array)
     
-    print()
     print() 
     print("=========Optimization============")
+    print()
     print("Optimal gain array found:", res_opti_dual_annealing.x)
     
-    res_cost_optimized, res_evaluate_optimized, stability_penalty, stability_margin_penalty, H_r_tf, H_n_tf, cl_peak_penalty= cost(obj_to_optimize, 
+    # res_cost_optimized, res_evaluate_optimized, stability_penalty, stability_margin_penalty, H_r_tf, H_n_tf, H_n_peak_penalty
+    res_cost_optimized  = cost(obj_to_optimize, 
         actuators_number=n_actuators,
         WFS_num=n1,
         WFS_den=d1,
@@ -226,34 +235,52 @@ def initial(param_dir = 'params_mod4.yaml'):
         controller_num = None, 
         controller_den = None)
     
-    print()
+    cost_function_value_optimized = res_cost_optimized['cost_function_value']
+    evaluate_optimized = res_cost_optimized['total_variance']
+    stability_penalty, sm_penalty, H_n_tf_peak_penalty, H_r_tf_peak_penalty, gm_penalty = res_cost_optimized['penalty']
+    H_n_tf_optimized = res_cost_optimized['H_n_tf']
+    H_r_tf_optimized = res_cost_optimized['H_r_tf']
+    H_ol_margins_optimized = res_cost_optimized['H_ol_margins']
+    H_n_bandwidth_optimized_Hz = res_cost_optimized['bandwidth_H_n'] * 180 / np.pi
+    
     print()  
     print("============ After Optimization ===========") 
-    print("Total cost result:", res_cost_optimized)
-    print("Optimized evaluation result:", res_evaluate_optimized[0].variance_terms, res_evaluate_optimized[1].variance_terms)
+    print()  
+    print("Cost function value:", cost_function_value_optimized )
+    print("Evaluation result (variance terms):", 
+          evaluate_optimized[0].variance_terms, 
+          evaluate_optimized[1].variance_terms)
     
     print("Optimized stability penalty:", stability_penalty)
-    print("Optimized stability margin penalty:", stability_margin_penalty)
-    print('Close_loop_peak_penalty of H_n:', cl_peak_penalty)
+    print("Optimized stability margin penalty:", sm_penalty)
+    print("Optimized gain margin penalty:", gm_penalty)
+    print('H_n_peak_penalty of H_n:', H_n_tf_peak_penalty)
+    print('H_r_peak_penalty of H_n:', H_r_tf_peak_penalty)
     
     print("Optimized controller num and den:", 
-          res_evaluate_optimized[0].controller_num, 
-          res_evaluate_optimized[0].controller_den)
-    print('H_r_tf:',H_r_tf[0])
-    print('H_n_tf:',H_n_tf[0])
-    
+          evaluate_optimized[0].controller_num, 
+          evaluate_optimized[0].controller_den)
+    print('H_r_tf:',H_r_tf_optimized[0])
+    print('H_n_tf:',H_n_tf_optimized[0])
     
     # 7. Plotting
     # bode figure for the transfer functions
+    
+    gm = H_ol_margins_optimized[0][mode_index]
+    pm = H_ol_margins_optimized[1][mode_index]
+    
+    # TODO
+    bw = H_n_bandwidth_optimized_Hz[mode_index]
     fig1, ax3 = bodeplot_Hz(
-    transfer_functions_ct=H_n_tf[mode_index],
+    transfer_functions_ct=H_n_tf_optimized[mode_index],
     omega_limits=[1e-5,frame_rate/2],
     omega_num=1000,
     labels="H_n ",
-    title="Transfer function H_n & H_r")
+    title="Transfer function H_n & H_r",
+    subtitle=f"[GM: {gm:.2f} dB, PM: {pm:.2f} deg]")
     
     bodeplot_Hz(
-    transfer_functions_ct=H_r_tf[mode_index],
+    transfer_functions_ct=H_r_tf_optimized[mode_index],
     omega_limits=[1e-5,frame_rate/2],
     omega_num=1000,
     labels="H_r ",

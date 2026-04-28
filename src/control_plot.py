@@ -14,54 +14,6 @@ import control as ct
 import matplotlib.pyplot as plt
 from src.Functions import build_transfer_function
 
-# def bodeplot_Hz(
-#     transfer_function_ct=None,
-#     omega_limits=None,
-#     omega_num=1000,
-#     label=None,
-#     title=None):
-    
-#     # after using this function, "plt.show()" must be used to display the figure
-    
-#     if transfer_function_ct is None:
-#         raise ValueError("Transfer function must not be empty")
-#     if omega_limits is None:
-#         raise ValueError("omega_limits must not be empty")
-#     if len(omega_limits) != 2:
-#         raise ValueError("omega_limits must be a 2-element array/list")
-    
-#     omega_limits = np.asarray(omega_limits, dtype=float)
-#     omega_limits_rad  = omega_limits * 2 * np.pi
-
-#     mag, phase, omega = ct.frequency_response(
-#         transfer_function_ct, 
-#         omega_limits=omega_limits_rad,
-#         omega_num=omega_num)    
-    
-#     phase_unwrap = np.unwrap(phase) 
-#     phase_deg = np.rad2deg(phase_unwrap)  
-    
-#     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 4))
-    
-#     omega_Hz = omega / (2*np.pi)
-#     ax1.semilogx(omega_Hz, 20 * np.log10(mag), linewidth=2, label=label)
-#     ax1.set_ylabel('Magnitude [dB]')
-#     if title:
-#         ax1.set_title(title)
-#     if label:
-#         ax1.legend()
-#     ax1.grid(True, linewidth=0.5, alpha=0.6)
-    
-#     ax2.semilogx(omega_Hz, phase_deg, linewidth=2, label=label)
-#     ax2.set_xlabel('Frequency [Hz]')
-#     ax2.set_ylabel('Phase [deg]')
-#     if label:
-#         ax2.legend()
-#     ax2.grid(True, linewidth=0.5, alpha=0.6)
-    
-#     fig.set_tight_layout(True)
-    
-#     return fig    
 
 def bodeplot_Hz(
     transfer_functions_ct=None,
@@ -70,6 +22,7 @@ def bodeplot_Hz(
     labels=None,
     styles=None,
     title=None,
+    subtitle=None,
     fig=None,
     ax1=None,
     ax2=None):
@@ -151,7 +104,7 @@ def bodeplot_Hz(
     
     # Create figure and axes if not provided
     if fig is None or ax1 is None or ax2 is None:
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 4))
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 5))
     
     # Plot each transfer function
     for i in range(n_systems):
@@ -194,8 +147,13 @@ def bodeplot_Hz(
     
     # Configure axes
     ax1.set_ylabel('Magnitude [dB]')
-    if title:
-        ax1.set_title(title)
+    if title or subtitle:
+        if title and subtitle:
+            ax1.set_title(f"{title}\n{subtitle}")
+        elif title:
+            ax1.set_title(title)
+        else:  # only subtitle
+            ax1.set_title(subtitle)
     if any(label is not None for label in labels) or n_systems > 1:
         ax1.legend()
     ax1.grid(True, linewidth=0.5, alpha=0.6)
