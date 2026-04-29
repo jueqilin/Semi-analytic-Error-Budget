@@ -33,7 +33,7 @@ from src.Functions import (
     aliasing_variance,
     funct_d2,
     build_transfer_function,
-    compute_andes_optical_gain,
+    compute_optical_gain,
     extract_propagation_coefficients
 )
 
@@ -151,9 +151,9 @@ class TestAliasingVariance(unittest.TestCase):
         seeing_arcsec = 0.98 * _WVL_REF / _R0 * (3600 * 180 / np.pi)
 
         try:
-            c_optg = compute_andes_optical_gain(
+            c_optg = compute_optical_gain(
                 file_mod0=_SA_OPT_GAIN_MOD0,
-                file_mod4=_SA_OPT_GAIN_MOD4,
+                file_mod1=_SA_OPT_GAIN_MOD4,
                 seeing=seeing_arcsec,
                 modulation_radius=_MODULATION_RADIUS
             )

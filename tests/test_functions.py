@@ -22,6 +22,7 @@ from src.Functions import (
     _load_andes_gain_grid,
     aliasing_psd_from_coeffs,
     build_integrator_controller_polynomials,
+    compute_optical_gain,
     compute_k_prime,
     compute_noise_PSD_intermediate,
     compute_slope_noise_variance,
@@ -578,6 +579,36 @@ class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
             0,
         )
 
+    @patch("src.Functions._load_optical_gain_grid")
+    def test_compute_optical_gain_accepts_generic_paired_grid(self, mock_load_grid):
+        mock_load_grid.return_value = (
+            np.array(
+                [
+                    [
+                        [1.0, 2.0],
+                        [3.0, 4.0],
+                    ],
+                    [
+                        [5.0, 6.0],
+                        [7.0, 8.0],
+                    ],
+                ]
+            ),
+            np.array([0.5, 1.0]),
+            np.array([0.0, 4.0]),
+        )
+
+        result = compute_optical_gain(
+            "system_mod0.fits",
+            "system_mod4.fits",
+            seeing=0.75,
+            modulation_radius=2.0,
+            actuators_number=2,
+        )
+
+        expected = np.array([[4.0], [5.0]])
+        np.testing.assert_allclose(result, expected)
+
 
 # ---------------------------------------------------------------------------
 # Tests that require files already present in the repository
@@ -587,7 +618,7 @@ class TestLoadParameters(unittest.TestCase):
     """load_parameters reads the YAML configuration file."""
 
     def setUp(self):
-        self.yaml_path = os.path.join(REPO_ROOT, "params_mod4.yaml")
+        self.yaml_path = os.path.join(REPO_ROOT, "params_ANDES.yaml")
 
     def test_returns_dict(self):
         self.assertIsInstance(load_parameters(self.yaml_path), dict)

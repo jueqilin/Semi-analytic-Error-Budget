@@ -8,7 +8,7 @@ from astropy.io import fits
 from src.Functions import (
     DEFAULT_ALIASING_ALPHA,
     PSD_final_alias,
-    compute_andes_optical_gain,
+    compute_optical_gain,
     load_parameters,
     read_sigma_slopes,
     double_interpolation_sigma_slope,
@@ -23,7 +23,7 @@ def verify_aliasing_energy():
     print("="*80 + "\n")
 
     # 1. Load Parameters
-    param = load_parameters('params_mod4.yaml')
+    param = load_parameters('params_ANDES.yaml')
     D = param['telescope']['telescope_diam']
     seeing = param['atmosphere']['seeing']
     modulation_radius = param['wavefront_sensor']['modulation_radius']
@@ -43,7 +43,7 @@ def verify_aliasing_energy():
     omega_sa = 2 * np.pi * temporal_freqs
 
     # 2. Compute Optical Gain
-    c_optg = compute_andes_optical_gain(
+    c_optg = compute_optical_gain(
         file_mod0,
         file_mod4,
         seeing,

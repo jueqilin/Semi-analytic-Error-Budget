@@ -20,7 +20,7 @@ from src.Functions import load_PSD_windshake
 from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
-from src.Functions import final_optical_gain
+from src.Functions import compute_optical_gain
 from src.Functions import final_soul_optical_gain_1
 from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
@@ -148,12 +148,13 @@ x_pixel = param['control']['slope_computer_weights']
 
 if system == "ANDES":    
 
-    c_optg = final_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                modulation_radius, n_actuators)
+    c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
+                                  modulation_radius, n_actuators,
+                                  modulation_radii=(0.0, 4.0))
 elif system =="SOUL":
     
-    c_optg = final_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                modulation_radius, n_actuators)  
+    c_optg = final_soul_optical_gain_1(file_optg_cube, bin_value,
+                                       magnitude, n_actuators)
 else:
     
     raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
