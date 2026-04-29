@@ -4,6 +4,8 @@
 
 == Start Script for Semi-analytic Error Budget Optimization ==
 
+NOTE: ONLY FOR SINGLE MODE
+
 Created on 2026-04-15 16:48
 
 @author: Jueqi Lin
