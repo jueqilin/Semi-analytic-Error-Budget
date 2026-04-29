@@ -25,6 +25,8 @@ wavefront_sensor:
   number_of_sub: 100
   # Modulation radius [lambda/D]
   modulation_radius: 3
+  # Modal radius for optg grid
+  modal_radius_soul: [0.0, 3.0]
 
 guide_star:
   # Number of photons per second per collecting area

@@ -19,8 +19,7 @@ from src.Functions import load_PSD_windshake
 from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
-from src.Functions import final_andes_optical_gain
-from src.Functions import final_soul_optical_gain_2
+from src.Functions import final_optical_gain
 from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
@@ -37,7 +36,7 @@ from src.plots import plot_PSD_alias_mode_0
 from src.plots import plot
 from src.plots import plot_PSD_OL_CL_mode_0
 from src.plots import plot_psd_vibr_soul
-from src.plots import optg_soul_version_1_vs_2
+from src.plots import optg_soul_comparison
 
 
 system = "SOUL"
@@ -69,21 +68,26 @@ wind_speed = param['atmosphere']['wind_speed']
 seeing = param['atmosphere']['seeing']
 fried_param = seeing_to_r0(seeing)
 
+
 rho = 0
 theta = 0
+
 
 value_F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
 F_excess_noise = np.sqrt(value_F_excess_noise)
 sky_background = param['wavefront_sensor']['sky_backgr']
 dark_current = param['wavefront_sensor']['dark_curr']
 readout_noise = param['wavefront_sensor']['noise_readout']
+mod_radii_andes = param['wavefront_sensor'].get('modal_radius_andes', None)
+mod_radii_soul = param['wavefront_sensor'].get('modal_radius_soul', None)
+
  
 file_path_R1 = param['data']['reconstruction_matrix'] 
 file_sigma_slope = param['data']['sigma_slopes']
 file_path_wind = param['data']['windshake_psd']
 file_modal_psd_alias_path = param['data']['modal_psd_alias']
 file_optg = param['data']['optical_gain_models']
-file_optg_cube = param['data']['optical_gain_cube']
+file_optg_cube = param['data'].get('optical_gain_cube', None)
 
 
 d1 = param['plant']['d_1']
@@ -132,48 +136,9 @@ n_subapert = param['wavefront_sensor']['number_of_sub']
 collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
-    
 
-
-
-
-
-
-
-
-#########
-#########
-
-
-if system == "ANDES":    
-
-    c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                      modulation_radius, n_actuators)
-elif system =="SOUL":
-    
-    c_optg = final_soul_optical_gain_2(file_optg[0], file_optg[1], seeing, 
-                                       modulation_radius, n_actuators)  
-else:
-    
-    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
-
- 
-
-###########
-##########
-  
-
-
-
-
-
-
-
-
-
-
-
-
+c_optg = final_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius, 
+                            n_actuators,  mod_radii_andes, mod_radii_soul, system)  
 
 display = True
 
@@ -357,7 +322,8 @@ if display:
                           file_path_R1, file_sigma_slope)
 
 
-    optg_soul_version_1_vs_2 (file_optg_cube, bin_value, magnitude, n_actuators, 
-                              file_optg[0], file_optg[1], seeing, modulation_radius)
+    optg_soul_comparison (file_optg_cube, bin_value, magnitude, n_actuators, 
+                          file_optg[0], file_optg[1], seeing, modulation_radius,
+                          mod_radii_andes, mod_radii_soul, system)
 
 

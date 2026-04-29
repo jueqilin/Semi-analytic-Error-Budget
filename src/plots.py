@@ -28,8 +28,8 @@ from src.Functions import measure_variance
 from src.Functions import build_transfer_function
 from src.Functions import interpolate_and_normalize_psd
 from src.Functions import align_psd_modes
-from src.Functions import final_soul_optical_gain_1
-from src.Functions import final_soul_optical_gain_2
+from src.Functions import final_optical_gain
+from src.Functions import final_soul_optical_gain
 
 
 
@@ -686,30 +686,45 @@ def plot_psd_vibr_soul (file_path_wind):
     plt.show()
     
  
-# Function to compare the optical gain values obtained from version 1 and version 2 
-# of the final_soul_optical_gain function.
+# Function to compare the optical gain values obtained from the two different 
+# functions to compute optg in SOUL case.
 
-def optg_soul_version_1_vs_2 (file_soul_optical_gain_cube, target_binning, 
-                             target_magnitude, actuators_number, file_mod0, 
-                             file_mod3, target_seeing, target_modulation_radius):   
+def optg_soul_comparison (file_soul_optical_gain_cube, target_binning, 
+                          target_magnitude, actuators_number, file_mod0, 
+                          file_mod3, target_seeing, target_modulation_radius,
+                          modal_rad_andes, modal_rad_soul, system):   
     
-    optg_1 = final_soul_optical_gain_1(file_soul_optical_gain_cube, target_binning, 
+    
+    if system == 'SOUL':
+    
+        optg_1 = final_soul_optical_gain(file_soul_optical_gain_cube, target_binning, 
                                        target_magnitude, actuators_number)
     
-    optg_2 = final_soul_optical_gain_2(file_mod0, file_mod3, target_seeing, target_modulation_radius, 
-                                       actuators_number)
+        optg_2 = final_optical_gain(file_mod0, file_mod3, target_seeing, target_modulation_radius, 
+                                    actuators_number, modal_rad_andes, modal_rad_soul, 
+                                    system)
     
-    n_modes = np.arange(actuators_number)
+        n_modes = np.arange(actuators_number)
     
-    plt.plot(n_modes, optg_1, label = "Optical gain version 1")
-    plt.plot(n_modes, optg_2, label = "Optical gain version 2")
-    plt.xlabel('Modes')
-    plt.ylabel('Gain')
-    plt.title('OPTG Version 1 vs 2')
-    plt.grid()
-    plt.legend()
-    plt.show()
+        plt.plot(n_modes, optg_1, label = "Optical gain version 1")
+        plt.plot(n_modes, optg_2, label = "Optical gain version 2")
+        plt.xlabel('Modes')
+        plt.ylabel('Gain')
+        plt.title('OPTG Version 1 vs 2')
+        plt.grid()
+        plt.legend()
+        plt.show()
     
+    elif system == 'ANDES':
+        
+        pass
+    
+    else: 
+        
+        raise RuntimeError("system must be 'ANDES' or 'SOUL'")
+        
+        
+        
     
     
     
