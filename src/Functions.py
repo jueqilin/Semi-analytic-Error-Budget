@@ -80,7 +80,7 @@ def funct_d2 (T_total):
     d2[0] = 1
     
     return d2
-
+    
 
 # Function that returns the numerator and denominator of the integrator controller C = g*Z/(Z-1)
 # expressed as polynomials in Z (descending powers, np.polyval convention).
@@ -1026,6 +1026,83 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
  
+    
+# Function to find the gain that optimize the total variance
+
+def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
+                    t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+                    excess_noise_factor, sky_background, dark_current, readout_noise,
+                    photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+                    slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+                    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+                    psd_turbulence, psd_windshake, sigma_slopes_path):
+    
+    number_of_actuators = 1                                                  
+     
+    gain_values = np.arange(gain_min, gain_max, 0.1)   
+                                                     
+    tot_variance = np.zeros_like(gain_values, dtype=float)
+    
+    for i in range(len(gain_values)):
+        
+        g = gain_values[i]
+        gain_val = np.array([g])                                               
+
+###########################       
+        
+        H_r_temp, H_n_meas = build_transfer_function(
+            omega_temp_freq_interval,
+            t_0,
+            number_of_actuators,
+            plant_num,
+            plant_den,
+            gain=gain_val,
+        )
+        H_n_alias = H_n_meas
+        
+        
+        variance_fit = fitting_variance(fitting_coeff, number_of_actuators, telescope_diameter, fried_parameter)
+        
+         
+        if np.array_equal(t_freqs, f): 
+            
+            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, number_of_actuators,
+                                                              omega_temp_freq_interval)
+
+        else: 
+            
+            PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
+            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, PSD_wind_vib_interp_norm,
+                                                           H_r_temp, number_of_actuators, omega_temp_freq_interval)
+
+        
+        
+        
+        _, variance_aliasing, _, _ = aliasing_variance(H_n_alias, number_of_actuators, omega_temp_freq_interval, 
+                                                       gain_val, alpha, telescope_diameter, seeing, modulation_radius,
+                                                       wind_speed, maximum_radial_order_corrected, 
+                                                       reconstruction_matrix_path, sigma_slopes_path)
+
+        
+        _, variance_measurement, _, _ = measure_variance(excess_noise_factor, slope_computer_weights, sky_background, 
+                                                         dark_current, readout_noise,photon_flux, telescope_diameter,
+                                                         frame_rate, magnitude, n_subaperture,collecting_area, 
+                                                         reconstruction_matrix_path,omega_temp_freq_interval, H_n_meas, 
+                                                         number_of_actuators, gain_val)
+        
+        
+        print ("CLOSED LOOP:")
+        tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
+                                         np.real(variance_aliasing), np.real(variance_measurement))
+    
+    idx_min = np.argmin(tot_variance)
+    gain_min_variance = gain_values[idx_min]
+    
+    
+    # print ("BEST GAIN:", gain_min_variance)
+
+    return gain_min_variance   
+         
 
 # Function to interpolate a 1D vector to a new set of points, setting values outside the original range to 0.
 

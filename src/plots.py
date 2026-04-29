@@ -70,7 +70,7 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
          
         if np.array_equal(t_freqs, f): 
             
-             _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, number_of_actuators,
+            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, number_of_actuators,
                                                               omega_temp_freq_interval)
 
         else: 

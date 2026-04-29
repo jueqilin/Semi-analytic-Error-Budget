@@ -28,6 +28,7 @@ from src.Functions import measure_variance
 from src.Functions import vibration_variance
 from src.Functions import seeing_to_r0
 from src.Functions import PSD_conversion
+from src.Functions import find_best_gain
 
 from src.plots import plot_total_variance_mode_0
 from src.plots import plot_all_PSD
@@ -111,30 +112,7 @@ gain_maximum = g_maximum_mapping.get(total_delay)
 gain_number = param['control']['gain_n']
 gain_value = param['control'].get('gain_value', None)
 bin_value = param['control']['bin']
-
-if gain_value is not None:
-    gain_value_array = np.asarray(gain_value, dtype=float).ravel()
-    gain_number_array = np.asarray(gain_number, dtype=int).ravel()
-
-    if gain_value_array.size == 1 and gain_number_array.size == 1:
-        gain_ = np.full(n_actuators, gain_value_array.item())
-    elif gain_value_array.size == gain_number_array.size:
-        gain_ = np.concatenate([
-            np.full(gain_number_array[index], gain_value_array[index])
-            for index in range(gain_value_array.size)
-        ])
-    else:
-        raise ValueError("gain_value and gain_n must have the same length")
-else:
-    if gain_number == 1:
-        gain_ = np.full(n_actuators, float(gain_minimum))
-    elif gain_number == n_actuators:
-        gain_ = np.linspace(gain_minimum, gain_maximum, gain_number)
-    else:
-        raise ValueError("Set gain_n to 1 or n_modes, or provide gain_value")
-
-if gain_.size != n_actuators:
-    raise ValueError(f"Gain vector length {gain_.size} does not match n_modes={n_actuators}")
+ 
 modulation_radius = param['wavefront_sensor']['modulation_radius']
 # here we do not use n_actuators because it can be reduced to analyse the error on a small number of modes.
 if system == "ANDES":
@@ -155,6 +133,11 @@ collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
     
+
+
+
+
+
 
 
 
@@ -183,6 +166,15 @@ else:
 
 
 
+
+
+
+
+
+
+
+
+
 display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
@@ -203,6 +195,40 @@ d2 = funct_d2(total_delay)
 plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
 plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
 
+
+best_gain = find_best_gain(gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
+                           t_0, plant_num, plant_den, telescope_diameter, fried_param,
+                           F_excess_noise, sky_background, dark_current, readout_noise,
+                           phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+                           x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
+                           wind_speed, maximum_radial_order, file_path_R1,
+                           PSD_atmosf, PSD_wind_vib, file_sigma_slope)
+
+
+if gain_value is not None:
+    gain_value_array = np.asarray(gain_value, dtype=float).ravel()
+    gain_number_array = np.asarray(gain_number, dtype=int).ravel()
+
+    if gain_value_array.size == 1 and gain_number_array.size == 1:
+        gain_ = np.full(n_actuators, gain_value_array.item())
+    elif gain_value_array.size == gain_number_array.size:
+        gain_ = np.concatenate([
+            np.full(gain_number_array[index], gain_value_array[index])
+            for index in range(gain_value_array.size)
+        ])
+    else:
+        raise ValueError("gain_value and gain_n must have the same length")
+else:
+    if gain_number == 1:
+        gain_ = np.full(n_actuators, float(best_gain))
+    elif gain_number == n_actuators:
+        gain_ = np.linspace(gain_minimum, gain_maximum, gain_number)
+    else:
+        raise ValueError("Set gain_n to 1 or n_modes, or provide gain_value")
+
+if gain_.size != n_actuators:
+    raise ValueError(f"Gain vector length {gain_.size} does not match n_modes={n_actuators}")
+    
 
 H_r_temp, H_n_meas = build_transfer_function(
     omega_temporal_freqs,
