@@ -171,9 +171,13 @@ def cost(obj_to_optimize,
     H_n_tf = result_control_CL_tf["H_n_tf"]
     H_r_tf = result_control_CL_tf["H_r_tf"]
     H_ol_tf = result_control_CL_tf["H_ol_tf"]
-
-    ctrl_num_evaluate = np.zeros((actuators_number, 2), dtype=float)
-    ctrl_den_evaluate = np.zeros((actuators_number, 2), dtype=float)
+    
+    if gain is not None:
+        ctrl_num_evaluate = np.zeros((actuators_number, 2), dtype=float)
+        ctrl_den_evaluate = np.zeros((actuators_number, 2), dtype=float)
+    elif controller_num is not None and controller_den is not None:
+        ctrl_num_evaluate = controller_num
+        ctrl_den_evaluate = controller_den     
     
     # cost_variance_result = []
     cost_variance = np.zeros(actuators_number, dtype=float)
@@ -183,9 +187,10 @@ def cost(obj_to_optimize,
     
     # 
     H_n_peak_limitation = 3 # dB
-    H_r_peak_limitation = 2 # dB
+    H_r_peak_limitation = 2 # dB    
     
     for i, ctrl_tf_i in enumerate(ctrl_tf):
+        
         ctrl_num_evaluate[i] = ctrl_tf_i.num[0][0]
         ctrl_den_evaluate[i] = ctrl_tf_i.den[0][0]
         
