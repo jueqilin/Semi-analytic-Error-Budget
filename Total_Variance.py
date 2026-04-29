@@ -10,6 +10,7 @@ Created on Fri Nov 14 15:17:28 2025
 
 import numpy as np 
 
+from src.Functions import seeing_to_r0
 from src.Functions import turbulence_psd
 from src.Functions import funct_d2
 from src.Functions import total_variance
@@ -19,8 +20,8 @@ from src.Functions import load_PSD_windshake
 from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
-from src.Functions import final_andes_optical_gain
-from src.Functions import final_soul_optical_gain_2
+from src.Functions import final_optical_gain
+from src.Functions import final_soul_optical_gain_1
 from src.Functions import build_transfer_function
 from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
@@ -147,12 +148,12 @@ x_pixel = param['control']['slope_computer_weights']
 
 if system == "ANDES":    
 
-    c_optg = final_andes_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                      modulation_radius, n_actuators)
+    c_optg = final_optical_gain(file_optg[0], file_optg[1], seeing, 
+                                modulation_radius, n_actuators)
 elif system =="SOUL":
     
-    c_optg = final_soul_optical_gain_2(file_optg[0], file_optg[1], seeing, 
-                                       modulation_radius, n_actuators)  
+    c_optg = final_optical_gain(file_optg[0], file_optg[1], seeing, 
+                                modulation_radius, n_actuators)  
 else:
     
     raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
@@ -285,21 +286,44 @@ else:
 # ALIASING  ---->  Variance OL, Variance CL, PSD CL, PSD OL
 #################
 
-var_alias_OL, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
-                                                                            c_optg, alpha_, telescope_diameter, seeing, modulation_radius,
-                                                                            wind_speed, maximum_radial_order, file_path_R1,  
-                                                                            file_sigma_slope)
+var_alias_OL, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(
+    transf_funct=H_n_alias,
+    actuators_number=n_actuators,
+    omega_temp_freq_interval=omega_temporal_freqs,
+    c_optg=c_optg,
+    alpha=alpha_,
+    telescope_diameter=telescope_diameter,
+    seeing=seeing,
+    modulation_radius=modulation_radius,
+    windspeed=wind_speed,
+    maximum_radial_order_corrected=maximum_radial_order,
+    file_path_matrix_R=file_path_R1,
+    file_path_sigma_slopes=file_sigma_slope,
+)
 
 #################
 # MEAS  ---->  Variance OL, Variance CL, PSD CL, PSD OL
 #################
 
 
-var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas  = measure_variance (F_excess_noise, x_pixel, sky_background, dark_current, 
-                                                                         readout_noise, phot_flux, telescope_diameter, frame_rate, 
-                                                                         magnitude, n_subapert, collecting_area, file_path_R1, 
-                                                                         omega_temporal_freqs, H_n_meas, n_actuators, 
-                                                                         c_optg)
+var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
+    F_excess_noise,
+    x_pixel,
+    sky_background,
+    dark_current,
+    readout_noise,
+    phot_flux,
+    telescope_diameter,
+    frame_rate,
+    magnitude,
+    n_subapert,
+    collecting_area,
+    file_path_R1,
+    H_n_meas,
+    n_actuators,
+    omega_temporal_freqs,
+    c_optg,
+)
 
 print ("OPEN LOOP:")
 var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL)

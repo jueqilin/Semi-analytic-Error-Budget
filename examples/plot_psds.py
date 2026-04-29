@@ -6,18 +6,21 @@ from scipy import integrate
 import matplotlib.pyplot as plt
 
 from src.Functions import (
-    load_parameters, 
-    turbulence_psd, 
+    DEFAULT_ALIASING_ALPHA,
+    load_parameters,
+    seeing_to_r0,
+    turbulence_psd,
     temporal_variance,
     aliasing_variance,
     measure_variance,
     build_transfer_function,
     compute_andes_optical_gain,
     funct_d2,
-    radial_order_from_n_modes
+    radial_order_from_n_modes,
 )
 
-def plot_system_psds(mode_index=0, plot_inputs=False):
+
+def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     print(f"\nGenerating PSD plot for Mode {mode_index}...")
 
     # 1. Load parameters
@@ -33,7 +36,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     wind_direction = 0.0
     wind_speed = param['atmosphere']['wind_speed']
     seeing = param['atmosphere']['seeing']
-    r0 = 0.98 * 500 / seeing
+    r0 = seeing_to_r0(seeing)
 
     F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
     sky_background = param['wavefront_sensor']['sky_backgr']
@@ -56,12 +59,12 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     temporal_freqs = np.logspace(-3, np.log10(frame_rate / 2.0), 1000)
     omega = 2 * np.pi * temporal_freqs
 
-    spatial_freqs = np.logspace(-4, 4, 100)
+    spatial_freqs = np.logspace(-4, 4, 300)
 
     T_tot = param['control']['total_delay']
     modulation_radius = param['wavefront_sensor']['modulation_radius']
     maximum_radial_order = radial_order_from_n_modes(n_actuators)
-    alpha_ = -17 / 3
+    alpha_ = DEFAULT_ALIASING_ALPHA
 
     phot_flux = float(param['guide_star']['flux_photons'])
     magnitude = param['guide_star']['magn']
@@ -78,8 +81,11 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     d2 = funct_d2(T_tot)
 
     # 2. Generate Atmospheric Input
-    PSD_atmosf = turbulence_psd(0, 0, aperture_radius, aperture_center, r0, L0, layers_altitude,
-                                wind_speed, wind_direction, spatial_freqs, temporal_freqs, n_modes=n_actuators)
+    PSD_atmosf = turbulence_psd(0, 0, aperture_radius, aperture_center,
+                                r0, L0, layers_altitude,
+                                wind_speed, wind_direction,
+                                spatial_freqs, temporal_freqs,
+                                n_modes=n_actuators)
     PSD_vibration_zeros = np.zeros_like(PSD_atmosf)
 
     # 3. Build Transfer Functions
@@ -95,22 +101,49 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     )
 
     # 4. Compute Optical Gain (needed for aliasing)
-    c_optg = compute_andes_optical_gain(file_mod0, file_mod4, seeing, modulation_radius)
+    c_optg = compute_andes_optical_gain(file_mod0=file_mod0,
+                                        file_mod4=file_mod4,
+                                        seeing=seeing,
+                                        modulation_radius=modulation_radius,
+                                        actuators_number=n_actuators)
 
     # 5. Extract PSDs from separate functions
-    _, PSD_out_temp, PSD_in_temp = temporal_variance(
+    _, _, PSD_out_temp, PSD_in_temp = temporal_variance(
         PSD_atmosf, PSD_vibration_zeros, H_r, n_actuators, omega
     )
 
-    _, PSD_out_alias, PSD_in_alias = aliasing_variance(
-        H_n, n_actuators, omega, alpha_, D, seeing, modulation_radius, wind_speed,
-        maximum_radial_order, file_path_R1, c_optg, sigma_slopes_path
+    _, _, PSD_out_alias, PSD_in_alias = aliasing_variance(
+        transf_funct=H_n,
+        actuators_number=n_actuators,
+        omega_temp_freq_interval=omega,
+        c_optg=c_optg,
+        alpha=alpha_,
+        telescope_diameter=D,
+        seeing=seeing,
+        modulation_radius=modulation_radius,
+        windspeed=wind_speed,
+        maximum_radial_order_corrected=maximum_radial_order,
+        file_path_matrix_R=file_path_R1,
+        file_path_sigma_slopes=sigma_slopes_path
     )
 
-    _, PSD_out_meas, PSD_in_meas = measure_variance(
-        F_excess_noise, x_pixel, sky_background, dark_current, readout_noise,
-        phot_flux, D, frame_rate, magnitude, n_subapert, collecting_area,
-        file_path_R1, omega, H_n, n_actuators
+    _, _, PSD_out_meas, PSD_in_meas = measure_variance(
+        F_excess=F_excess_noise,
+        pixel_pos=x_pixel,
+        sky_bkg=sky_background,
+        dark_curr=dark_current,
+        read_out_noise=readout_noise,
+        photon_flux=phot_flux,
+        telescope_diameter=D,
+        frame_rate=frame_rate,
+        magnitudo=magnitude,
+        n_subaperture=n_subapert,
+        collecting_area=collecting_area,
+        file_path_matrix_R=file_path_R1,
+        omega_temp_freq_interval=omega,
+        transf_funct=H_n,
+        actuators_number=n_actuators,
+        c_optg=c_optg
     )
 
     if mode_index < 0 or mode_index >= n_actuators:
@@ -173,7 +206,24 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     plt.legend(loc='lower left', fontsize=11)
 
     plt.tight_layout()
-    plt.show()
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
+
+    return {
+        "mode_index": int(mode_index),
+        "frequencies": freqs,
+        "psd_total": psd_total,
+        "var_temp_in": float(var_temp_in),
+        "var_alias_in": float(var_alias_in),
+        "var_meas_in": float(var_meas_in),
+        "var_temp_out": float(var_temp_out),
+        "var_alias_out": float(var_alias_out),
+        "var_meas_out": float(var_meas_out),
+    }
+
 
 if __name__ == "__main__":
     plot_system_psds(mode_index=0, plot_inputs=True)

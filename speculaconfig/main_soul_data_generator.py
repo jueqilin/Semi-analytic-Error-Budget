@@ -6,9 +6,9 @@ import numpy as np
 from astropy.io import fits
 
 from speculaconfig.yaml_overrides import write_yaml_overrides
-from speculaconfig.utils import get_pupil_mask, read_freq, get_psd, compute_and_save_rec, save_correction_vector
+from speculaconfig.utils import get_pupil_mask, read_freq, compute_and_save_rec #, save_correction_vector, get_psd,
 
-from .root import sn_path, pupil_path, frames_path, im_path, calib_dir, alias_path, ogs_path, temp_alias_path
+from .root import sn_path, pupil_path, frames_path, im_path, calib_dir, alias_path, ogs_path, rec_path, temp_alias_path
 
 
 rMods = np.array([0,1,2,3,4]) #([2,3,4,5,6])
@@ -97,22 +97,162 @@ for i,n_subap in enumerate(n_subaps):
             compute_and_save_rec(im_tag=im_tag, rec_tag=rec_tag, Nmodes=N, overwrite=True)
 
 
-
-# 3.5 Save correction vectors for SIMPC computation
-# These vectors go from max_corr to min_corr linearly over the radial orders of the corrected modes,
-# and are 0 for all modes from Ncorrmodes to Nmodes.
-# Note that 1 means perfect removal of the mode and 0 means no correction.
-for N in n_modes:
-    save_correction_vector(tag='s0.6', max_corr=0.99, max_corr=0.4, Ncorrmodes=N, Nmodes=660)
-    save_correction_vector(tag='s0.8', max_corr=0.95, max_corr=0.2, Ncorrmodes=N, Nmodes=660)
-    save_correction_vector(tag='s1.0', max_corr=0.9, max_corr=0.1, Ncorrmodes=N, Nmodes=660)
-    save_correction_vector(tag='s1.2', max_corr=0.85, max_corr=0.1, Ncorrmodes=N, Nmodes=660)
-    save_correction_vector(tag='s1.4', max_corr=0.8, max_corr=0.1, Ncorrmodes=N, Nmodes=660)
+# 3.5 Compute correction vectors for SIMPC
+for i,n_subap in enumerate(n_subaps):
+    pup_dist = np.max((min_pup_dist,max_pup_dist/max(n_subaps)*n_subap))
+    N = n_modes[i]
+    rec_tag = f'pyr3.0_{n_subap:.0f}x{n_subap:.0f}_{N:1.0f}modes_rec'
+    for seeing in seeings:
+        overrides = ("{"
+                    f"pyr.pup_diam: {n_subap:.1f}, "
+                    f"pyr.pup_dist: {pup_dist:.1f}, "
+                    f"pyr.mod_amp: 3.0, "
+                    f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "
+                    f"pyr_slopes.sn_object:  'pyr3.0_{n_subap:.0f}x{n_subap:.0f}_sn', "
+                    f"pyr_modalrec.recmat_object: {rec_tag}, "
+                    f"filter.n_modes:   [{N:1.0f}], "
+                    f"dm.nmodes:   {N:1.0f}, "
+                    f"seeing.constant: {seeing:1.1f}, "
+                    f"data_store.store_dir:         '{os.path.join(calib_dir,'scratch_corrvec')}', "
+                    f"data_store.inputs.input_list: ['s{seeing:1.1f}_{N:1.0f}modes_atmo-atmo_modes.out_modes','s{seeing:1.1f}_{N:1.0f}modes_res-dm_mode_res.out_modes'], "
+                    "}")
+        write_yaml_overrides(input_string=overrides)
+        tag = f's{seeing:1.1f}_{N:1.0f}modes_corrvec'
+        try:
+            corrvec = fits.getdata(os.path.join(calib_dir,'data',tag+'.fits'))
+            print('Correction vector '+tag+' already exists: skipping computation')
+        except FileNotFoundError:
+            os.system(f"specula {main_config} calib_corrvec.yml temp_overrides.yml")
+            atmo_modes = fits.getdata(os.path.join(calib_dir,'scratch_corrvec',f's{seeing:1.1f}_{N:1.0f}modes_atmo.fits'))
+            res_modes = fits.getdata(os.path.join(calib_dir,'scratch_corrvec',f's{seeing:1.1f}_{N:1.0f}modes_res.fits'))
+            atmo_rms = np.sqrt(np.mean(atmo_modes**2,axis=0))
+            res_rms = np.sqrt(np.mean(res_modes**2,axis=0))
+            corrvec = 1.0-res_rms/atmo_rms
+            corrvec = np.maximum(0.0,corrvec)
+            fits.writeto(os.path.join(calib_dir,'data',tag+'.fits'),corrvec)
+            print('Saved correction vector as: '+tag)
 
 
 # 4. Calibrate SIMPC vs n_subap, rMods, r0/correction
+os.makedirs(ogs_path,exist_ok=True)
 fs = read_freq(params_path=f'./{main_config}')
-ncycles = 100
+ncycles = 40
+for i,n_subap in enumerate(n_subaps):
+    pup_dist = np.max((min_pup_dist,max_pup_dist/max(n_subaps)*n_subap))
+    N = n_modes[i]
+    for rMod in rMods:
+        im_tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_im'
+        im = fits.getdata(os.path.join(im_path,im_tag+'.fits'))
+        im = im[:,:N]
+        im_norm = np.diag(im.T @ im)
+        for seeing in seeings:
+            cv_tag = f's{seeing:1.1f}_{N:1.0f}modes_corrvec'
+            tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}'
+            simpc_tag = tag+'_simpc'
+            overrides = ("{"
+                        f"main.total_time: {N*2*ncycles/fs}, "
+                        f"atmo_random.update_interval: {N*2:1.0f}, "
+                        f"pyr.pup_diam: {n_subap:.1f}, "
+                        f"pyr.pup_dist: {pup_dist:.1f}, "
+                        f"pyr.mod_amp: {rMod:.1f}, "
+                        f"pushpull.nmodes: {N:1.0f}, "
+                        f"pushpull.ncycles: {ncycles:1.0f}, "
+                        f"pyr_im_calibrator.nmodes: {N:1.0f}, "
+                        f"dm_random.nmodes: {N:1.0f}, "
+                        f"dm.nmodes: {N:1.0f}, "
+                        f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "
+                        f"seeing_random.constant: {seeing:1.1f}, "
+                        f"scale_random.constant_mul_data: {cv_tag}, "
+                        f"pyr_im_calibrator.im_tag: '{simpc_tag}', "
+                        f"data_store.store_dir:         '{os.path.join(calib_dir,'scratch_simpc')}', "  
+                        f"data_store.create_tn: false, "
+                        f"data_store.inputs.input_list: ['s{seeing:1.1f}_{N:1.0f}modes_atmo-atmo_pc_modes.out_modes'], "
+                        "}")
+            write_yaml_overrides(input_string=overrides)
+            try:
+                os.system(f"specula {main_config} calib_simpc.yml temp_overrides.yml")
+                # specula.main_simul(yml_files=[main_config, 'calib_simpc.yml'], overrides=overrides)
+                simpc = fits.getdata(os.path.join(im_path,simpc_tag+'.fits'))
+                og = np.diag(simpc.T @ im)/im_norm
+                cog = np.sqrt((np.diag(simpc.T @ simpc)/im_norm)**2 - og**2)
+                atmo_modes = fits.getdata(os.path.join(calib_dir,'scratch_simpc',f's{seeing:1.1f}_{N:1.0f}modes_atmo.fits'))
+                print(atmo_modes.shape)
+                atmo_rms = np.sqrt(np.mean(atmo_modes**2,axis=0))
+                atmo_res = np.sqrt(np.sum(atmo_rms[:N]**2))
+                tag += f'_{atmo_res:1.0f}Nm'
+                fits.writeto(os.path.join(ogs_path,tag+'_og.fits'),og)
+                print('Saved optical gains as: '+tag+'_og')
+                fits.writeto(os.path.join(ogs_path,tag+'_compl_og.fits'),cog)
+                print('Saved complementary (perpedicular) optical gains as: '+tag+'_og')
+            except FileExistsError:
+                pass
+
+# Add perfect correction vectors (seeing 0")
+atmo_modes = fits.getdata(os.path.join(calib_dir,'scratch_corrvec',f's{seeing:1.1f}_{N:1.0f}modes_atmo.fits'))
+L = len(atmo_modes)
+for i,N in enumerate(n_modes):
+    tag = f's0.0_{N:1.0f}modes_corrvec'
+    try:
+        corrvec = fits.getdata(os.path.join(calib_dir,'data',tag+'.fits'))
+        print('Correction vector '+tag+' already exists: skipping computation')
+    except FileNotFoundError:
+        corrvec = np.zeros(L)
+        corrvec[:N] = 1.0 # perfect correction up to mode N
+        fits.writeto(os.path.join(calib_dir,'data',tag+'.fits'),corrvec)
+        print('Saved correction vector as: '+tag)
+
+
+# 4.5 Calibrate SIMPC vs n_subap, rMods for PERFECT correction
+fs = read_freq(params_path=f'./{main_config}')
+ncycles = 40
+for i,n_subap in enumerate(n_subaps):
+    pup_dist = np.max((min_pup_dist,max_pup_dist/max(n_subaps)*n_subap))
+    N = n_modes[i]
+    cv_tag = f's0.0_{N:1.0f}modes_corrvec'
+    for rMod in rMods:
+        im_tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_im'
+        im = fits.getdata(os.path.join(im_path,im_tag+'.fits'))
+        im = im[:,:N]
+        im_norm = np.diag(im.T @ im)
+        for seeing in seeings:
+            tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}'
+            simpc_tag = tag+'_simpc_pl'
+            overrides = ("{"
+                        f"main.total_time: {N*2*ncycles/fs}, "
+                        f"atmo_random.update_interval: {N*2:1.0f}, "
+                        f"pyr.pup_diam: {n_subap:.1f}, "
+                        f"pyr.pup_dist: {pup_dist:.1f}, "
+                        f"pyr.mod_amp: {rMod:.1f}, "
+                        f"pushpull.nmodes: {N:1.0f}, "
+                        f"pushpull.ncycles: {ncycles:1.0f}, "
+                        f"pyr_im_calibrator.nmodes: {N:1.0f}, "
+                        f"dm_random.nmodes: {N:1.0f}, "
+                        f"dm.nmodes: {N:1.0f}, "
+                        f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "
+                        f"seeing_random.constant: {seeing:1.1f}, "
+                        f"scale_random.constant_mul_data: {cv_tag}, "
+                        f"pyr_im_calibrator.im_tag: '{simpc_tag}', "
+                        f"data_store.store_dir:         '{os.path.join(calib_dir,'scratch_simpc')}', "  
+                        f"data_store.create_tn: false, "
+                        f"data_store.inputs.input_list: ['{N:1.0f}modes_pushpull-pushpull.output'], " 
+                        "}")
+            write_yaml_overrides(input_string=overrides)
+            try:
+                os.system(f"specula {main_config} calib_simpc.yml temp_overrides.yml")
+                # specula.main_simul(yml_files=[main_config, 'calib_simpc.yml'], overrides=overrides)
+                simpc = fits.getdata(os.path.join(im_path,simpc_tag+'.fits'))
+                og = np.diag(simpc.T @ im)/im_norm
+                cog = np.sqrt(np.diag(simpc.T @ simpc)/im_norm - og**2)
+                fits.writeto(os.path.join(ogs_path,tag+'_og_pl.fits'),og)
+                print('Saved optical gains as: '+tag+'_og_pl')
+                fits.writeto(os.path.join(ogs_path,tag+'_compl_og_pl.fits'),cog)
+                print('Saved complementary (perpedicular) optical gains as: '+tag+'_compl_og_pl')
+            except FileExistsError:
+                pass
+
+# 4.75 Calibrate SIMPC vs n_subap, rMods for NO FITTING error correction
+fs = read_freq(params_path=f'./{main_config}')
+ncycles = 40
 for i,n_subap in enumerate(n_subaps):
     pup_dist = np.max((min_pup_dist,max_pup_dist/max(n_subaps)*n_subap))
     N = n_modes[i]
@@ -123,32 +263,40 @@ for i,n_subap in enumerate(n_subaps):
         im_norm = np.diag(im.T @ im)
         for seeing in seeings:
             tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}'
-            simpc_tag = tag+'_simpc'
+            simpc_tag = tag+'_simpc_nofit'
             overrides = ("{"
                         f"main.total_time: {N*2*ncycles/fs}, "
+                        f"atmo_random.update_interval: {N*2:1.0f}, "
                         f"pyr.pup_diam: {n_subap:.1f}, "
                         f"pyr.pup_dist: {pup_dist:.1f}, "
                         f"pyr.mod_amp: {rMod:.1f}, "
                         f"pushpull.nmodes: {N:1.0f}, "
+                        f"pushpull.ncycles: {ncycles:1.0f}, "
                         f"pyr_im_calibrator.nmodes: {N:1.0f}, "
-                        f"scale_random.constant_mul_data: 'correction_vector_{N:1.0f}modes_s{seeing:1.1f}', "
-                        f"dm_random.nmodes: {N:1.0f}, "
-                        f"dm.nmodes: {N:1.0f}, "
+                        # f"dm.nmodes: {N:1.0f}, "
                         f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "
                         f"seeing_random.constant: {seeing:1.1f}, "
                         f"pyr_im_calibrator.im_tag: '{simpc_tag}', "
+                        f"data_store.store_dir:         '{os.path.join(calib_dir,'scratch_simpc')}', "  
+                        f"data_store.create_tn: false, "
+                        f"data_store.inputs.input_list: ['s{seeing:1.1f}_{N:1.0f}modes_atmo-atmo_pc_modes.out_modes'], " 
                         "}")
             write_yaml_overrides(input_string=overrides)
             try:
-                os.system(f"specula {main_config} calib_simpc.yml temp_overrides.yml")
+                os.system(f"specula {main_config} calib_simpc_nofit.yml temp_overrides.yml")
                 # specula.main_simul(yml_files=[main_config, 'calib_simpc.yml'], overrides=overrides)
                 simpc = fits.getdata(os.path.join(im_path,simpc_tag+'.fits'))
                 og = np.diag(simpc.T @ im)/im_norm
-                fits.writeto(os.path.join(ogs_path,tag+'_og.fits'),og)
-                print('Saved optical gains as: '+tag+'_og')
-                # for N in n_modes[:i]:
-                #     rec_tag = tag+f'_{N:1.0f}modes_rec'
-                #     compute_and_save_rec(root_dir, im_tag=im_tag, rec_tag=rec_tag, Nmodes=N)
+                cog = np.sqrt(np.diag(simpc.T @ simpc)/im_norm - og**2)
+                atmo_modes = fits.getdata(os.path.join(calib_dir,'scratch_simpc',f's{seeing:1.1f}_{N:1.0f}modes_atmo.fits'))
+                print(atmo_modes.shape)
+                atmo_rms = np.sqrt(np.mean(atmo_modes**2,axis=0))
+                atmo_res = np.sqrt(np.sum(atmo_rms[:N]**2))
+                tag += f'_{atmo_res:1.0f}Nm'
+                fits.writeto(os.path.join(ogs_path,tag+'_og_nofit.fits'),og)
+                print('Saved optical gains as: '+tag+'_og_nofit')
+                fits.writeto(os.path.join(ogs_path,tag+'_compl_og_nofit.fits'),cog)
+                print('Saved complementary (perpedicular) optical gains as: '+tag+'_compl_og_nofit')
             except FileExistsError:
                 pass
 
@@ -159,27 +307,37 @@ for i,n_subap in enumerate(n_subaps):
         for seeing in seeings:
             modes_vec = n_modes.copy() if i == len(n_subaps)-1 and seeing == 1.0 else np.array([n_modes[i]])
             for N in modes_vec:
+                tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}'
+                rec_tag = tag+f'_{N:1.0f}modes_rec'   
+                try:
+                    rec = fits.getdata(os.path.join(rec_path,rec_tag+'.fits'))
+                    print('Reconstructor '+rec_tag+' already exists: skipping computation')
+                except FileNotFoundError:
+                    simpc_tag = tag+'_simpc'
+                    compute_and_save_rec(calib_dir, im_tag=simpc_tag, rec_tag=rec_tag, Nmodes=N, overwrite=True)
                 overrides = ("{"
                             f"pyr.pup_diam: {n_subap:.1f}, "
                             f"pyr.pup_dist: {pup_dist:.1f}, "
                             f"pyr.mod_amp: {rMod:.1f}, "
                             f"pyr_modalrec.recmat_object: 'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_{N:1.0f}modes_rec', "
+                            f"pyr_pc_modalrec.recmat_object: '{rec_tag}', "
                             f"pyr_slopes.pupdata_object: 'pyr_pupdata_{n_subap:.0f}x{n_subap:.0f}', "
                             f"seeing.constant: {seeing:1.1f}, "
                             f"perfect_dm.nmodes: {N:1.0f}, "
-                            f"data_store.store_dir: '{temp_alias_path}', "
                             "}")
                 write_yaml_overrides(input_string=overrides)
+                tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}_{N:1.0f}modes_alias'
                 try:
+                    alias_rms = fits.getdata(os.path.join(alias_path,tag+'.fits'))
+                    print('Aliasing power file '+tag+' already exists: skipping computation')
+                except FileNotFoundError:
                     os.system(f"specula {main_config} calib_aliasing.yml temp_overrides.yml")
-                    # specula.main_simul(yml_files=[main_config, 'calib_aliasing.yml'], overrides=overrides) #
-                    alias_modes = fits.getdata(os.path.join(temp_alias_path,'pyr_modes.fits'))
-                    psd,f = get_psd(alias_modes.T, nperseg=1024, dt=1/fs)
-                    tag = f'pyr{rMod:1.1f}_{n_subap:.0f}x{n_subap:.0f}_s{seeing:1.1f}_{N:1.0f}modes_alias_PSD'
-                    fits.writeto(os.path.join(alias_path,tag+'.fits'),psd,overwrite=True)
-                    print('Saved aliasing PSD as: '+tag)
-                except FileExistsError:
-                    pass
-
-
+                    alias_modes = fits.getdata(os.path.join(calib_dir,'scratch_aliasing','pyr_modes.fits'))
+                    alias_rms = np.sqrt(np.mean(alias_modes**2,axis=0)) 
+                    fits.writeto(os.path.join(alias_path,tag+'.fits'),alias_rms,overwrite=True)
+                    print('Saved aliasing power as: '+tag)
+                    alias_pc_modes = fits.getdata(os.path.join(calib_dir,'scratch_aliasing','pyr_pc_modes.fits'))
+                    alias_pc_rms = np.sqrt(np.mean(alias_pc_modes**2,axis=0)) 
+                    fits.writeto(os.path.join(alias_path,'pc_'+tag+'.fits'),alias_pc_rms,overwrite=True)
+                    print('Saved aliasing power as: pc_'+tag)
 

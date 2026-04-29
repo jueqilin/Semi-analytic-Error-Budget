@@ -12,12 +12,15 @@ or:
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 from scipy import integrate as scipy_integrate
 
 from src.Functions import (
+    DEFAULT_ALIASING_ALPHA,
     _load_andes_gain_grid,
+    aliasing_psd_from_coeffs,
     build_integrator_controller_polynomials,
     compute_k_prime,
     compute_noise_PSD_intermediate,
@@ -31,8 +34,10 @@ from src.Functions import (
     load_parameters,
     load_PSD_windshake,
     omega_0,
+    PSD_final_alias,
     read_sigma_slopes,
     resize_psd_like,
+    seeing_to_r0,
     total_variance,
     transfer_funct,
 )
@@ -75,13 +80,16 @@ class TestFittingVariance(unittest.TestCase):
 
     @staticmethod
     def _formula(coeff, n_act, D, r0):
-        return coeff * n_act ** (-0.9) * (D / r0) ** (5 / 3)
+        wavelength = 500e-9  # Reference wavelength for r0 in meters
+        rad2_to_nm2 = (wavelength * 1e9 / (2 * np.pi)) ** 2
+        return coeff * n_act ** (-0.9) * (D / r0) ** (5 / 3) * rad2_to_nm2
 
     def test_unit_inputs_return_coefficient(self):
         # With N=1, D=1, r0=1 the formula reduces to just 'coeff'
+        rad2_to_nm2 = (500e-9 * 1e9 / (2 * np.pi)) ** 2
         for coeff in (0.1, 0.2778, 1.0):
             self.assertAlmostEqual(
-                fitting_variance(coeff, 1, 1.0, 1.0), coeff, places=12
+                fitting_variance(coeff, 1, 1.0, 1.0), coeff * rad2_to_nm2, places=12
             )
 
     def test_matches_analytical_formula(self):
@@ -131,6 +139,35 @@ class TestFuncOut(unittest.TestCase):
         H = np.array([0.5 + 0.5j, 1.0 + 2.0j])
         PSD = np.array([1.0, 2.0])
         np.testing.assert_array_almost_equal(np.imag(func_out(H, PSD)), [0.0, 0.0])
+
+
+# ---------------------------------------------------------------------------
+# seeing_to_r0
+# ---------------------------------------------------------------------------
+
+class TestSeeingToR0(unittest.TestCase):
+    """seeing_to_r0 converts seeing in arcsec to the Fried parameter r0 in meters."""
+
+    def test_typical_seeing_value(self):
+        # A seeing of 1.0 arcsec at 500 nm corresponds to about 0.1006 m
+        # (using r0 = 0.976 * lambda / seeing_rad)
+        r0 = seeing_to_r0(1.0, wavelength=500e-9)
+        self.assertAlmostEqual(r0, 0.10064, places=4)
+
+    def test_scales_inversely_with_seeing(self):
+        # Doubling the seeing should halve r0
+        r0_good_seeing = seeing_to_r0(0.5)
+        r0_bad_seeing = seeing_to_r0(1.0)
+        self.assertAlmostEqual(r0_good_seeing / r0_bad_seeing, 2.0, places=10)
+
+    def test_scales_linearly_with_wavelength(self):
+        # Doubling the wavelength should double r0
+        r0_500nm = seeing_to_r0(1.0, wavelength=500e-9)
+        r0_1000nm = seeing_to_r0(1.0, wavelength=1000e-9)
+        self.assertAlmostEqual(r0_1000nm / r0_500nm, 2.0, places=10)
+        
+    def test_positive_value(self):
+        self.assertGreater(seeing_to_r0(0.8), 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +465,7 @@ class TestComputeSlopeNoiseVariance(unittest.TestCase):
         #   slope_var = sum(x_i^2 * n_phot) / (4*n_phot)^2 = sum(x_i^2) / (16*n_phot)
         pixel_pos = np.array([1.0, 0.0, 0.0, 0.0])
         n_phot = flux_for_frame_for_pixel(9e12, 38.5, 1000, 7, 100, 1000)
-        expected = np.sum(pixel_pos ** 2) / (16 * n_phot)
+        expected = np.sum(pixel_pos ** 2) / n_phot    
         result = compute_slope_noise_variance(
             1.0, pixel_pos, 0, 0, 0, 9e12, 38.5, 1000, 7, 100, 1000
         )
@@ -459,19 +496,86 @@ class TestComputeKPrime(unittest.TestCase):
         )
         return sigma_slope ** 2 / (c ** 2 * integral)
 
+
+class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
+    """Regression tests for aliasing defaults and optical-gain broadcasting."""
+
+    @staticmethod
+    def _formula(omega, alpha, sigma_slope, c, D, v, N):
+        w0      = 2 * np.pi * (N + 1) * v / D
+        om_min  = np.min(omega)
+        om_max  = np.max(omega)
+        integral = (
+            w0 ** alpha * (w0 - om_min)
+            + (om_max ** (alpha + 1) - w0 ** (alpha + 1)) / (alpha + 1)
+        )
+        return sigma_slope ** 2 / (c ** 2 * integral)
+
+    @patch("src.Functions.k_coeff_aliasing", return_value=np.array([1.0]))
+    def test_psd_final_alias_defaults_alpha_to_minus_17_over_3(self, mock_k):
+        omega = np.array([1.0, 2.0, 4.0])
+
+        PSD_final_alias(
+            c_optg=2.0,
+            actuators_number=1,
+            omega_temp_freq_interval=omega,
+            telescope_diameter=8.0,
+            seeing=0.8,
+            modulation_radius=3.0,
+            windspeed=10.0,
+            maximum_radial_order_corrected=5,
+            file_path_matrix_R="dummy.fits",
+        )
+
+        self.assertEqual(mock_k.call_args.kwargs["alpha"], DEFAULT_ALIASING_ALPHA)
+
+    @patch("src.Functions.k_coeff_aliasing", return_value=np.array([1.0, 4.0]))
+    def test_psd_final_alias_accepts_row_vector_optical_gain(self, mock_k):
+        omega = np.array([1.0, 2.0, 4.0])
+        c_optg = np.array([[2.0, 4.0, 8.0, 16.0]])
+
+        result = PSD_final_alias(
+            c_optg=c_optg,
+            actuators_number=2,
+            omega_temp_freq_interval=omega,
+            telescope_diameter=8.0,
+            seeing=0.8,
+            modulation_radius=3.0,
+            windspeed=10.0,
+            maximum_radial_order_corrected=5,
+            file_path_matrix_R="dummy.fits",
+            alpha=-1.0,
+        )
+
+        expected = aliasing_psd_from_coeffs(
+            2,
+            omega,
+            np.array([1.0, 4.0]),
+            alpha=-1.0,
+            telescope_diameter=8.0,
+            windspeed=10.0,
+            maximum_radial_order_corrected=5,
+        ) / np.array([[2.0], [4.0]]) ** 2
+
+        np.testing.assert_allclose(result, expected)
+        mock_k.assert_called_once()
+
     def test_matches_analytical_formula(self):
         omega = np.logspace(0, 3, 500)   # 1 … 1000 rad/s
         alpha, sigma, c = -17 / 3, 0.01, 0.8
         D, v, N = 38.5, 8.0, 88
         expected = self._formula(omega, alpha, sigma, c, D, v, N)
         self.assertAlmostEqual(
-            compute_k_prime(omega, alpha, sigma, D, v, N)/c**2, expected, places=10
+            compute_k_prime(omega, sigma, D, v, N, alpha=alpha) / c**2,
+            expected,
+            places=10,
         )
 
     def test_result_is_positive(self):
         omega = np.logspace(0, 3, 200)
         self.assertGreater(
-            compute_k_prime(omega, -17 / 3, 0.01, 38.5, 8.0, 88), 0
+            compute_k_prime(omega, 0.01, 38.5, 8.0, 88, alpha=-17 / 3),
+            0,
         )
 
 
@@ -520,7 +624,7 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
     def test_output_is_3d_ndarray(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
         self.assertIsInstance(grid, np.ndarray)
         self.assertEqual(grid.ndim, 3)
 
@@ -528,12 +632,14 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
         # One row for mod0, one for mod4
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        self.assertEqual(_load_andes_gain_grid(file_mod0, file_mod4).shape[0], 2)
+        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        self.assertEqual(grid.shape[0], 2)
 
     def test_all_values_are_positive(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        self.assertTrue(np.all(_load_andes_gain_grid(file_mod0, file_mod4) > 0))
+        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        self.assertTrue(np.all(grid > 0))
 
 
 class TestReadSigmaSlopes(_ChdirMixin, unittest.TestCase):
@@ -541,11 +647,17 @@ class TestReadSigmaSlopes(_ChdirMixin, unittest.TestCase):
 
     FILE = "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
 
-    def test_returns_ndarray(self):
-        self.assertIsInstance(read_sigma_slopes(self.FILE), np.ndarray)
+    def test_returns_ndarray_and_axes(self):
+        """Verifies that the function returns three ndarrays (data, seeing_axis, mod_radius_axis)."""
+        data, seeing_vals, modal_radius_vals = read_sigma_slopes(self.FILE)
+        self.assertIsInstance(data, np.ndarray)
+        self.assertIsInstance(seeing_vals, np.ndarray)
+        self.assertIsInstance(modal_radius_vals, np.ndarray)
 
     def test_non_negative_values(self):
-        self.assertTrue(np.all(read_sigma_slopes(self.FILE) >= 0))
+        """Verifies that the extracted slope RMS data contains only non-negative values."""
+        data, _, _ = read_sigma_slopes(self.FILE)
+        self.assertTrue(np.all(data >= 0))
 
 
 class TestLoadPSDWindshake(_ChdirMixin, unittest.TestCase):
