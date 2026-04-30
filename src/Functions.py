@@ -1159,7 +1159,7 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                     photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
                     slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
                     wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
-                    psd_turbulence, psd_windshake, sigma_slopes_path):
+                    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg): # <-- AGGIUNTO c_optg
     
     number_of_actuators = 1                                                  
      
@@ -1167,6 +1167,12 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                                                      
     tot_variance = np.zeros_like(gain_values, dtype=float)
     
+    # Eseguiamo l'interpolazione fuori dal loop per efficienza (non cambia ad ogni guadagno!)
+    if not np.array_equal(t_freqs, f):
+        psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
+    else:
+        psd_windshake_ready = psd_windshake
+
     for i in range(len(gain_values)):
         
         g = gain_values[i]
@@ -1185,36 +1191,49 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
         H_n_alias = H_n_meas
         
         
-        variance_fit = fitting_variance(fitting_coeff, number_of_actuators, telescope_diameter, fried_parameter)
+        variance_fit = fitting_variance(fitting_coeff, number_of_actuators,
+                                        telescope_diameter, fried_parameter)
         
-         
-        if np.array_equal(t_freqs, f): 
-            
-            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, number_of_actuators,
-                                                              omega_temp_freq_interval)
+        _, variance_temporal, _, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
+                                                       H_r_temp, number_of_actuators,
+                                                       omega_temp_freq_interval)
 
-        else: 
-            
-            PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
-            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, PSD_wind_vib_interp_norm,
-                                                           H_r_temp, number_of_actuators, omega_temp_freq_interval)
+        # Chiamata esplicita con keyword arguments per evitare errori di posizionamento
+        _, variance_aliasing, _, _ = aliasing_variance(
+            transf_funct=H_n_alias,
+            actuators_number=number_of_actuators,
+            omega_temp_freq_interval=omega_temp_freq_interval,
+            c_optg=c_optg,
+            telescope_diameter=telescope_diameter,
+            seeing=seeing,
+            modulation_radius=modulation_radius,
+            windspeed=wind_speed,
+            maximum_radial_order_corrected=maximum_radial_order_corrected,
+            file_path_matrix_R=reconstruction_matrix_path,
+            alpha=alpha,
+            file_path_sigma_slopes=sigma_slopes_path
+        )
 
-        
-        
-        
-        _, variance_aliasing, _, _ = aliasing_variance(H_n_alias, number_of_actuators, omega_temp_freq_interval, 
-                                                       gain_val, alpha, telescope_diameter, seeing, modulation_radius,
-                                                       wind_speed, maximum_radial_order_corrected, 
-                                                       reconstruction_matrix_path, sigma_slopes_path)
+        # Chiamata esplicita con keyword arguments
+        _, variance_measurement, _, _ = measure_variance(
+            F_excess=excess_noise_factor,
+            pixel_pos=slope_computer_weights,
+            sky_bkg=sky_background,
+            dark_curr=dark_current,
+            read_out_noise=readout_noise,
+            photon_flux=photon_flux,
+            telescope_diameter=telescope_diameter,
+            frame_rate=frame_rate,
+            magnitudo=magnitude,
+            n_subaperture=n_subaperture,
+            collecting_area=collecting_area,
+            file_path_matrix_R=reconstruction_matrix_path,
+            transf_funct=H_n_meas,
+            actuators_number=number_of_actuators,
+            omega_temp_freq_interval=omega_temp_freq_interval,
+            c_optg=c_optg
+        )
 
-        
-        _, variance_measurement, _, _ = measure_variance(excess_noise_factor, slope_computer_weights, sky_background, 
-                                                         dark_current, readout_noise,photon_flux, telescope_diameter,
-                                                         frame_rate, magnitude, n_subaperture,collecting_area, 
-                                                         reconstruction_matrix_path,omega_temp_freq_interval, H_n_meas, 
-                                                         number_of_actuators, gain_val)
-        
-        
         print ("CLOSED LOOP:")
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
                                          np.real(variance_aliasing), np.real(variance_measurement))
@@ -1222,11 +1241,10 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
     idx_min = np.argmin(tot_variance)
     gain_min_variance = gain_values[idx_min]
     
-    
     # print ("BEST GAIN:", gain_min_variance)
 
-    return gain_min_variance   
-         
+    return gain_min_variance
+
 
 # Function to interpolate a 1D vector to a new set of points, setting values outside the original range to 0.
 

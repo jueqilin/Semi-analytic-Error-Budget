@@ -40,7 +40,9 @@ data:
   # Path to sigma slopes from aliasing
   sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
   # Path to SOUL optical gain cube
-  optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
+  #    Note that the cube should be provided if no optical gain models are given,
+  #    and vice versa. If both are provided, an error is raised.
+  # optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
   # Path to SOUL modulation models (binning 1, mod0 and mod3)
   optical_gain_models: ["src/file_fits/LBT/SOUL_og_mod0.fits", "src/file_fits/LBT/SOUL_og_mod3.fits"]
   # Path to modal PSD_aliasing from specula 

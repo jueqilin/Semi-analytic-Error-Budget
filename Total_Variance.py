@@ -83,9 +83,11 @@ file_path_R1 = param['data']['reconstruction_matrix']
 file_sigma_slope = param['data']['sigma_slopes']
 file_path_wind = param['data']['windshake_psd']
 file_modal_psd_alias_path = param['data']['modal_psd_alias']
-file_optg = param['data']['optical_gain_models']
-file_optg_cube = param['data']['optical_gain_cube']
-
+file_optg = param['data'].get('optical_gain_models', None)
+file_optg_cube = param['data'].get('optical_gain_cube', None)
+if file_optg is not None and file_optg_cube is not None:
+    raise RuntimeError("Both optical gain models and optical gain cube provided."
+                       " Please provide only one of them.")
 
 d1 = param['plant']['d_1']
 d3 = param['plant']['d_3']
@@ -146,12 +148,12 @@ x_pixel = param['control']['slope_computer_weights']
 #########
 
 
-if system == "ANDES":    
+if file_optg is not None and file_optg_cube is None:
 
     c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
                                   modulation_radius, n_actuators,
                                   modulation_radii=(0.0, 4.0))
-elif system =="SOUL":
+elif file_optg is None and file_optg_cube is not None:
     
     c_optg = final_soul_optical_gain_1(file_optg_cube, bin_value,
                                        magnitude, n_actuators)
@@ -204,7 +206,7 @@ best_gain = find_best_gain(gain_minimum, gain_maximum, omega_temporal_freqs, tem
                            phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
                            x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
                            wind_speed, maximum_radial_order, file_path_R1,
-                           PSD_atmosf, PSD_wind_vib, file_sigma_slope)
+                           PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg)
 
 
 if gain_value is not None:
@@ -381,6 +383,9 @@ if display:
                           phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
                           file_path_R1, file_sigma_slope)
 
+
+    if file_optg_cube is None:
+        file_optg_cube = "src/file_fits/LBT/SOUL_OPTG.fits"
 
     optg_soul_version_1_vs_2 (file_optg_cube, bin_value, magnitude, n_actuators, 
                               file_optg[0], file_optg[1], seeing, modulation_radius)

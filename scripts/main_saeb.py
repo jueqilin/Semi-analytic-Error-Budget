@@ -155,9 +155,9 @@ def run(yaml_file):
 
     file_path_R1 = param['data']['reconstruction_matrix']
     file_path_wind1 = param['data']['windshake_psd']
-    file_optg = param['data']['optical_gain_models']
+    file_optg = param['data'].get('optical_gain_models', None)
     file_sigma_slope = param['data']['sigma_slopes']
-    file_optg_cube = param['data'].get('optical_gain_cube')
+    file_optg_cube = param['data'].get('optical_gain_cube', None)
 
     d1 = param['plant']['d_1']
     d3 = param['plant']['d_3']
@@ -215,7 +215,7 @@ def run(yaml_file):
     d2 = funct_d2(total_delay)
 
     c_optg = 0
-    if system == 'SOUL':
+    if file_optg is None and file_optg_cube is not None:
         c_optg = final_soul_optical_gain_1(
             file_optg_cube,
             control['bin'],

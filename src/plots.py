@@ -29,6 +29,7 @@ from src.Functions import build_transfer_function
 from src.Functions import interpolate_and_normalize_psd
 from src.Functions import align_psd_modes
 from src.Functions import final_soul_optical_gain_1
+from src.Functions import compute_optical_gain
 
 
 
@@ -519,11 +520,8 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
         raise RuntimeError("Propagation coefficients not loaded") 
    
     print("Propagation coefficients loaded successfully.")
-    
-    data_slopes = read_sigma_slopes(file_path_sigma_slopes)
-    seeing_vals = data_slopes[0,0,:]                                           
-  
-    modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0]) 
+
+    data_slopes, seeing_vals, modal_radius_vals = read_sigma_slopes(file_path_sigma_slopes)
     
     sigma_slope_alias = double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
                                                          target_modulation_radius, seeing)
@@ -562,7 +560,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
     print("ALIASING VARIANCE ONE MODE (OPEN LOOP):", sigma_alias_2_one_mode)
     
     print("ALIASING VARIANCE FROM PSD ONE MODE (OPEN LOOP):", integral_per_mode[0])
-    
+
 
 # Function to compare the mode 0 aliasing PSD from data files with the one computed 
     
@@ -728,34 +726,27 @@ def plot_psd_vibr_soul (file_path_wind):
     plt.show()
     
  
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+# Function to compare the optical gain values obtained from version 1 and version 2 
+# of the final_soul_optical_gain function.
 
+def optg_soul_version_1_vs_2 (file_soul_optical_gain_cube, target_binning, 
+                             target_magnitude, actuators_number, file_mod0, 
+                             file_mod3, target_seeing, target_modulation_radius):   
+    
+    optg_1 = final_soul_optical_gain_1(file_soul_optical_gain_cube, target_binning, 
+                                       target_magnitude, actuators_number)
+    
+    optg_2 = compute_optical_gain(file_mod0, file_mod3, target_seeing, target_modulation_radius, 
+                                  actuators_number)
+    
+    n_modes = np.arange(actuators_number)
+    
+    plt.plot(n_modes, optg_1, label = "Optical gain version 1")
+    plt.plot(n_modes, optg_2, label = "Optical gain version 2")
+    plt.xlabel('Modes')
+    plt.ylabel('Gain')
+    plt.title('OPTG Version 1 vs 2')
+    plt.grid()
+    plt.legend()
+    plt.show()
 
-    
-    
-    
-  
-
-    
