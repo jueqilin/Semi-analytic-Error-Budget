@@ -19,7 +19,7 @@ from scipy import integrate as scipy_integrate
 
 from src.Functions import (
     DEFAULT_ALIASING_ALPHA,
-    _load_andes_gain_grid,
+    _load_gain_grid,
     aliasing_psd_from_coeffs,
     build_integrator_controller_polynomials,
     compute_optical_gain,
@@ -650,12 +650,12 @@ class _ChdirMixin:
 
 
 class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
-    """_load_andes_gain_grid assembles a 2×N array from ANDES FITS files."""
+    """_load_gain_grid assembles a 2×N array from ANDES FITS files."""
 
     def test_output_is_3d_ndarray(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_gain_grid(file_mod0, file_mod4)
         self.assertIsInstance(grid, np.ndarray)
         self.assertEqual(grid.ndim, 3)
 
@@ -663,13 +663,13 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
         # One row for mod0, one for mod4
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_gain_grid(file_mod0, file_mod4)
         self.assertEqual(grid.shape[0], 2)
 
     def test_all_values_are_positive(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_gain_grid(file_mod0, file_mod4)
         self.assertTrue(np.all(grid > 0))
 
 

@@ -28,7 +28,7 @@ from src.Functions import measure_variance
 from src.Functions import build_transfer_function
 from src.Functions import interpolate_and_normalize_psd
 from src.Functions import align_psd_modes
-from src.Functions import final_soul_optical_gain_1
+from src.Functions import final_soul_optical_gain
 from src.Functions import compute_optical_gain
 
 
@@ -730,8 +730,7 @@ def plot_psd_vibr_soul (file_path_wind):
 
 def optg_soul_comparison (file_soul_optical_gain_cube, target_binning, 
                           target_magnitude, actuators_number, file_mod0, 
-                          file_mod3, target_seeing, target_modulation_radius,
-                          modal_rad_andes, modal_rad_soul, system):   
+                          file_mod3, target_seeing, target_modulation_radius):   
     
     
     optg_1 = final_soul_optical_gain(file_soul_optical_gain_cube, target_binning, 

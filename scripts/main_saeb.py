@@ -23,7 +23,7 @@ from src.Functions import seeing_to_r0
 from src.Functions import aliasing_variance
 from src.Functions import build_transfer_function
 from src.Functions import compute_optical_gain
-from src.Functions import final_soul_optical_gain_1
+from src.Functions import final_soul_optical_gain
 from src.Functions import fitting_variance
 from src.Functions import funct_d2
 from src.Functions import interpolate_and_normalize_psd
@@ -216,7 +216,7 @@ def run(yaml_file):
 
     c_optg = 0
     if file_optg is None and file_optg_cube is not None:
-        c_optg = final_soul_optical_gain_1(
+        c_optg = final_soul_optical_gain(
             file_optg_cube,
             control['bin'],
             magnitudo,

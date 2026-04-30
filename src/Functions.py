@@ -584,12 +584,12 @@ def _load_gain_grid(file_mod1, file_mod2):
     
     modal_radius_vals = np.zeros(2)
 
-    with fits.open(file_mod0) as hdul:
+    with fits.open(file_mod1) as hdul:
         gain_mod0 = hdul[0].data
         seeing_vals = hdul[1].data
         modal_radius_vals[0] = 0  # Assuming the first file corresponds to modulation radius = 0
         
-    with fits.open(file_mod4) as hdul:
+    with fits.open(file_mod2) as hdul:
         gain_mod4 = hdul[0].data
         seeing_vals_check = hdul[1].data
         modal_radius_vals[1] = 4  # Assuming the second file corresponds to modulation radius = 4
