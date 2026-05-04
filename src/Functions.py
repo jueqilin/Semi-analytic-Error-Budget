@@ -1693,15 +1693,3 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
