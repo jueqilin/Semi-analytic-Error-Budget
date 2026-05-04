@@ -14,7 +14,7 @@ from src.Functions import (
     aliasing_variance,
     measure_variance,
     build_transfer_function,
-    compute_andes_optical_gain,
+    compute_optical_gain,
     funct_d2,
     radial_order_from_n_modes,
 )
@@ -24,7 +24,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     print(f"\nGenerating PSD plot for Mode {mode_index}...")
 
     # 1. Load parameters
-    param = load_parameters('params_mod4.yaml')
+    param = load_parameters('params_ANDES.yaml')
 
     n_actuators = param['control']['n_modes']
     D = param['telescope']['telescope_diam']
@@ -101,11 +101,11 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     )
 
     # 4. Compute Optical Gain (needed for aliasing)
-    c_optg = compute_andes_optical_gain(file_mod0=file_mod0,
-                                        file_mod4=file_mod4,
-                                        seeing=seeing,
-                                        modulation_radius=modulation_radius,
-                                        actuators_number=n_actuators)
+    c_optg = compute_optical_gain(file_mod0=file_mod0,
+                                  file_mod1=file_mod4,
+                                  seeing=seeing,
+                                  modulation_radius=modulation_radius,
+                                  actuators_number=n_actuators)
 
     # 5. Extract PSDs from separate functions
     _, _, PSD_out_temp, PSD_in_temp = temporal_variance(

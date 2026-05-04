@@ -22,7 +22,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.Functions import seeing_to_r0
 from src.Functions import aliasing_variance
 from src.Functions import build_transfer_function
-from src.Functions import compute_andes_optical_gain
+from src.Functions import compute_optical_gain
+from src.Functions import final_soul_optical_gain
 from src.Functions import fitting_variance
 from src.Functions import funct_d2
 from src.Functions import interpolate_and_normalize_psd
@@ -154,8 +155,9 @@ def run(yaml_file):
 
     file_path_R1 = param['data']['reconstruction_matrix']
     file_path_wind1 = param['data']['windshake_psd']
-    file_optg = param['data']['optical_gain_models']
+    file_optg = param['data'].get('optical_gain_models', None)
     file_sigma_slope = param['data']['sigma_slopes']
+    file_optg_cube = param['data'].get('optical_gain_cube', None)
 
     d1 = param['plant']['d_1']
     d3 = param['plant']['d_3']
@@ -213,14 +215,23 @@ def run(yaml_file):
     d2 = funct_d2(total_delay)
 
     c_optg = 0
-    if system == "ANDES":
-        c_optg = compute_andes_optical_gain(
+    if file_optg is None and file_optg_cube is not None:
+        c_optg = final_soul_optical_gain(
+            file_optg_cube,
+            control['bin'],
+            magnitudo,
+            n_actuators,
+        )
+    else:
+        c_optg = compute_optical_gain(
             file_optg[0],
             file_optg[1],
             seeing_,
             modulation_radius,
             actuators_number=n_actuators,
+            modulation_radii=(0.0, 4.0),
         )
+
 
     plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
     plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
