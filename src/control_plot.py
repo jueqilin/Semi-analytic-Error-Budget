@@ -200,4 +200,115 @@ def psd_compare(
         raise ValueError(
             "Provide either 'gain' (integrator) or both "
             "'controller_num' and 'controller_den'")
+        
+def set_psd_plot_title_text(controller_type, mode_index, **title_text_params):
     
+    """_summary_
+
+    'gain': gain_optimized if controller_type == 1 else None,
+    'ctrl_num': ctrl_num_optimized if controller_type == 2 else None,
+    'ctrl_den': ctrl_den_optimized if controller_type == 2 else None
+
+    Returns:
+        title_text: psd plot title text based on the controller type and parameters
+    """
+    base_text = f"Spectral Analysis (PSD) in Closed Loop - Zernike Mode {mode_index}"
+    
+    if controller_type == 1:
+        gain = title_text_params.get('gain')
+        if gain is None:
+            raise ValueError("gain is required for integral controller")
+        title_text = (f"{base_text}\nLoop Gain = {gain:.2f}")
+        
+    elif controller_type == 2:
+        ctrl_num = title_text_params.get('ctrl_num')
+        ctrl_den = title_text_params.get('ctrl_den')
+        if ctrl_num is None or ctrl_den is None:
+            raise ValueError("ctrl_num and ctrl_den are required for standard controller mode")
+        num_text = "[" + ",".join(f"{x:.2f}" for x in ctrl_num) + "]"
+        den_text = "[" + ",".join(f"{x:.2f}" for x in ctrl_den) + "]"
+        title_text = (f"{base_text}\nController: num = {num_text}, den = {den_text}")
+    else:
+        title_text = base_text
+        
+    return title_text
+
+def plot_psds(mode_index,
+              freqs,
+              PSD_in_temp,
+              PSD_in_alias,
+              PSD_in_meas,
+              PSD_out_temp,
+              PSD_out_alias,
+              PSD_out_meas,
+              plot_inputs=True,
+              title_text=None):
+    
+    plt.figure(figsize=(12, 7))
+
+    plot_inputs = True
+    if plot_inputs:
+        plt.loglog(freqs, PSD_in_temp[mode_index, :], label='Turbulence (Open Loop)',
+                   color='tab:blue', linestyle='--', alpha=0.6)
+        plt.loglog(freqs, PSD_in_alias[mode_index, :], label='Aliasing (Open Loop)',
+                   color='tab:orange', linestyle='--', alpha=0.6)
+        plt.loglog(freqs, PSD_in_meas[mode_index, :], label='Noise (Open Loop)',
+                   color='tab:green', linestyle='--', alpha=0.6)
+
+    plt.loglog(freqs, PSD_out_temp[mode_index, :], label='Turbulence Residual (Servo-lag)',
+               color='tab:blue', linewidth=2.5)
+    plt.loglog(freqs, PSD_out_alias[mode_index, :], label='Aliasing Residual',
+               color='tab:orange', linewidth=2.5)
+    plt.loglog(freqs, PSD_out_meas[mode_index, :], label='Noise Residual',
+               color='tab:green', linewidth=2.5)
+
+    psd_total = (PSD_out_temp[mode_index, :] +
+                 PSD_out_alias[mode_index, :] +
+                 PSD_out_meas[mode_index, :])
+
+    plt.loglog(freqs, psd_total, label='Total PSD (Sum)',
+               color='black', linewidth=3, linestyle='-.')
+
+    # title text was defined above if-else based on the controller type and parameters
+    if title_text is None:
+        title_text = f"Spectral Analysis (PSD) in Closed Loop - Zernike Mode {mode_index}"
+    plt.title(title_text, fontsize=14)
+    plt.xlabel("Temporal Frequency [Hz]", fontsize=12)
+    plt.ylabel("Power Spectral Density [nm² / Hz]", fontsize=12)
+    plt.grid(True, which="both", linestyle=":", alpha=0.7)
+    plt.legend(loc='lower left', fontsize=11)
+
+    plt.tight_layout()
+
+    return()
+
+def plot_nyquist(G_ol_tf,
+                 freqs_Hz=None):
+    
+    if freqs_Hz is None:
+        freqs = np.logspace(0, 2, 1000)* 2* np.pi
+    else:
+        freqs = freqs_Hz * 2 * np.pi
+    
+    # mag, phase, freqs_out = ct.freqresp(G_ol_tf, freqs)
+    
+    # real_part = mag.flatten() * np.cos(phase.flatten())
+    # imag_part = mag.flatten() * np.sin(phase.flatten())
+    plt.figure(figsize=(5, 5))
+    tf_nyquist_response = ct.nyquist_response(G_ol_tf)
+    cplt = ct.nyquist_plot(tf_nyquist_response, freqs, title='', linewidth=2, max_curve_magnitude=25)
+    plt.title('Nyquist plot', fontsize=14)
+    
+    # plt.figure(figsize=(5, 5))
+    # real = np.real(tf_nyquist_response.response)
+    # imag = np.imag(tf_nyquist_response.response)
+    # plt.plot(real, imag, '-', linewidth=2, label='Nyquist Contour')
+    # plt.plot(real, -imag, ':', linewidth=2, alpha=0.7, color='#1f77b4', label='Negative Frequencies')
+    # plt.plot(-1, 0, 'rx', markersize=5, label='Critical Point (-1, 0)')
+    # plt.grid(True, alpha=0.3)
+    # plt.xlabel('Real Axis')
+    # plt.ylabel('Imaginary Axis')
+    # plt.title('Nyquist plot', fontweight='bold', fontsize=14)
+    
+    return(tf_nyquist_response.count)
+ 

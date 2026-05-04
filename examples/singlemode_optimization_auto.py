@@ -5,11 +5,11 @@
 == Start Script for Semi-analytic Error Budget Optimization ==
 
 NOTE: 1. ONLY FOR SINGLE MODE
-      2. Used to optimize standard controller: C(z) = a0 * z^n + a1 * z^(n-1) + ... + an / b0 * z^m + a1 * z^(m-1) + ... + am
-         where n is the numerators' order and m is the denarators' order. 
-         n and m should be offered by yaml file which are required that m >= n.
+      2. The controller type and parameters will be determined by the YAML file automatically:
+         - controller type==1: intergral controller, only optimize the gain value
+         - controller type==2: polynomial controller, optimize the coefficients of the numerator and denominator polynomials
          
-Created on 2026-04-29 14:59
+Created on 2026-05-03 14:59
 
 @author: Jueqi Lin
 """
@@ -19,7 +19,11 @@ import numpy as np
 import control as ct
 from scipy.optimize import dual_annealing
 import matplotlib.pyplot as plt
-from src.control_plot import bodeplot_Hz
+from src.control_plot import (
+    bodeplot_Hz,
+    set_psd_plot_title_text,
+    plot_psds,
+    plot_nyquist)
 
 DEFAULT_SRC_PATH = os.path.dirname(__file__)
 DEFAULT_FITTING_COEFF = 0.28
@@ -40,12 +44,9 @@ from src.Functions import (
     seeing_to_r0,
 )
 
-from src.control_utils import (
-    control_CL_tf_margin,
-    cost,
-)
+from src.control_utils import cost
 
-def initial(param_dir = 'params_mod4_standard.yaml'):
+def initial(param_dir = 'params_mod4_polynomial.yaml'):
     # 1. Load parameters
     # param = load_parameters(os.path.join(DEFAULT_SRC_PATH, param_dir))
     param = load_parameters(param_dir)
@@ -96,24 +97,34 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
     n_subapert = param['wavefront_sensor']['number_of_sub']
     collecting_area = param['telescope']['collect_area']
     x_pixel = param['control']['slope_computer_weights']
-
-    gain_value = param['control'].get('gain_value')
-    ctrl_order = param['control'].get('order')
     
-    if gain_value is not None:
-        gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
-        ctrl_num_array = None
-        ctrl_den_array = None
-    elif ctrl_order is not None:
-        gain_array = None
-        ctrl_num_array = np.zeros((n_actuators,ctrl_order[0]+1), dtype=float)
-        ctrl_num_array[:,0] = 1.0
-        ctrl_den_array = np.zeros((n_actuators,ctrl_order[1]+1), dtype=float)
-        ctrl_den_array[:,0] = 1.0
-    else:
-        gain_array = np.full(n_actuators, float(param['control']['gain_min']))
-        ctrl_num_array = None
-        ctrl_den_array = None   
+    controller_type = param['optimization'].get('ctrl_type')
+
+    if controller_type is not None:
+        if controller_type == 1:  # integral controller
+            gain_value = param['control'].get('gain_value')
+            if gain_value is not None:
+                gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
+                ctrl_num_array = None
+                ctrl_den_array = None
+            else:
+                gain_array = np.full(n_actuators, float(param['control']['gain_min']))
+                ctrl_num_array = None
+                ctrl_den_array = None
+        elif controller_type == 2: # polynomial controller
+            ctrl_order = param['optimization'].get('order')
+            if ctrl_order is not None:
+                gain_array = None
+                n_num_poly = ctrl_order[0]+1
+                n_den_poly = ctrl_order[1]+1
+                ctrl_num_array = np.zeros(n_num_poly, dtype=float)
+                ctrl_num_array[0] = 1.0
+                ctrl_den_array = np.zeros(n_den_poly, dtype=float)
+                ctrl_den_array[0] = 1.0  
+            else:
+                raise ValueError("Provide controller's order (polynomial controller)")
+        else:
+            raise ValueError("Provide 'ctrl_type' ")    
 
     # d2 = funct_d2(T_tot)
     d2 = funct_d2(T_tot)
@@ -188,93 +199,102 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
         den3=d3,
     )
     
-    # generate the system with the initial controller (without optimization)
-    res_cost_initial =  cost(obj_to_optimize, 
-        actuators_number=n_actuators,
-        WFS_num=n1,
-        WFS_den=d1,
-        ASM_num=n2,
-        ASM_den=d2,
-        RTC_num=n3,
-        RTC_den=d3, 
-        gain = None,
-        controller_num = ctrl_num_array, 
-        controller_den = ctrl_den_array)    
-    
-    cost_function_value_no_opti = res_cost_initial['cost_function_value']
-    evaluate_no_opti = res_cost_initial['total_variance']
+
     
     # 6. Optimization
     # evaluate function just for one mode!!!  
     # build up the cost function to be optimized with dual_annealing method
-    n_iter_optimization = int(100)
-    seed_optimization = int(50)
+    n_iter_optimization = 200
+    seed_optimization = 50
     
-    if gain_array is not None:
+    if controller_type== 1:
+        # generate the system with the initial controller (without optimization)
+        res_cost_initial =  cost(obj_to_optimize, 
+                            gain=gain_array[mode_index])    
+    
+        cost_function_value_no_opti = res_cost_initial['cost_function_value']
+        evaluate_no_opti = res_cost_initial['total_variance']
+        
         opti_cost_func = lambda x: cost(obj_to_optimize,
-                                actuators_number=n_actuators,
-                                WFS_num=n1,
-                                WFS_den=d1,
-                                ASM_num=n2,
-                                ASM_den=d2,
-                                RTC_num=n3,
-                                RTC_den=d3, 
-                                gain = x,
-                                controller_num = None, 
-                                controller_den = None)['cost_function_value']
+                                gain = x)['cost_function_value']
+        
         gain_min = float(param['control']['gain_min'])
-        opti_bounds = [(gain_min, 2) for _ in range(len(gain_array))]  # Example bounds for each gain parameter
-        res_opti_dual_annealing = dual_annealing(opti_cost_func, opti_bounds, maxiter=n_iter_optimization, seed=seed_optimization)
-    
+        gain_max = 1.0
+        
+        if gain_min >= gain_max:
+            raise ValueError(f"gain_min ({gain_min}) must be less than gain_max ({gain_max})")
+
+        x0_integral = np.array([gain_array[mode_index]])
+        opti_bounds = [(gain_min, gain_max)] # Example bounds for each gain parameter
+        res_opti_dual_annealing = dual_annealing(opti_cost_func, 
+                                                opti_bounds,
+                                                x0=x0_integral,
+                                                maxiter=n_iter_optimization, 
+                                                seed=seed_optimization)
+        
         print()  
         print("=========before optimization============")
         print()
         print("plant num and den:", plant_num, plant_den)
         print("Cost function value:", cost_function_value_no_opti)
-        print("Evaluation result (variance terms):", evaluate_no_opti[0].variance_terms)
+        print("Evaluation result (variance terms):", evaluate_no_opti.variance_terms)
         print("Initial Gain array:", gain_array)
-        
+    
         print() 
         print("=========Optimization============")
         print()
         print("Optimal gain array found:", res_opti_dual_annealing.x)
-        
+    
         # res_cost_optimized, res_evaluate_optimized, stability_penalty, stability_margin_penalty, H_r_tf, H_n_tf, H_n_peak_penalty
         res_cost_optimized  = cost(obj_to_optimize, 
-            actuators_number=n_actuators,
-            WFS_num=n1,
-            WFS_den=d1,
-            ASM_num=n2,
-            ASM_den=d2,
-            RTC_num=n3,
-            RTC_den=d3, 
-            gain = res_opti_dual_annealing.x,
-            controller_num = None, 
-            controller_den = None)
+                                    gain=res_opti_dual_annealing.x[0],
+                                    controller_num=None, 
+                                    controller_den=None)
         
-    else:
-        x0_standard = np.r_[ctrl_num_array.ravel(), ctrl_den_array.ravel()]
-        n_ctrl_num = n_actuators * (ctrl_order[0] + 1)
+        gain_optimized = res_opti_dual_annealing.x[0]
+        print(type(gain_optimized))
+        gain_array_optimized = np.ones(n_actuators) * gain_optimized
+        print(gain_array_optimized)
+        print(type(gain_array_optimized))
+        H_r_optimized, H_n_optimized = build_transfer_function(
+                                            omega,
+                                            t_0,
+                                            n_actuators,
+                                            plant_num,
+                                            plant_den,
+                                            gain=gain_array_optimized)
+        
+        title_text = set_psd_plot_title_text(controller_type, 
+                                         mode_index=mode_index,
+                                         gain=gain_optimized) 
+               
+    elif controller_type == 2:
+        # generate the system with the initial controller (without optimization)
+        res_cost_initial =  cost(obj_to_optimize, 
+                            controller_num=ctrl_num_array, 
+                            controller_den=ctrl_den_array)    
+    
+        cost_function_value_no_opti = res_cost_initial['cost_function_value']
+        evaluate_no_opti = res_cost_initial['total_variance']
+        
+        x0_poly = np.r_[ctrl_num_array, ctrl_den_array]
         opti_cost_func = lambda x: cost(obj_to_optimize,
-                                actuators_number=n_actuators,
-                                WFS_num=n1,
-                                WFS_den=d1,
-                                ASM_num=n2,
-                                ASM_den=d2,
-                                RTC_num=n3,
-                                RTC_den=d3, 
-                                gain = None,
-                                controller_num = x[:n_ctrl_num].reshape(n_actuators, ctrl_order[0] + 1), 
-                                controller_den = x[n_ctrl_num:].reshape(n_actuators, ctrl_order[1] + 1))['cost_function_value']
-        opti_bounds = [(-10, 10) for _ in range(len(x0_standard))]
-        res_opti_dual_annealing = dual_annealing(opti_cost_func, opti_bounds, x0=x0_standard, maxiter=n_iter_optimization, seed=seed_optimization)
+                                gain=None,
+                                controller_num = x[:n_num_poly], 
+                                controller_den = x[n_num_poly:])['cost_function_value']
+        opti_bounds = [(-10, 10) for _ in range(len(x0_poly))]
+        res_opti_dual_annealing = dual_annealing(opti_cost_func, 
+                                                 opti_bounds, 
+                                                 x0=x0_poly, 
+                                                 maxiter=n_iter_optimization, 
+                                                 seed=seed_optimization)
     
         print()  
         print("=========before optimization============")
         print()
         print("plant num and den:", plant_num, plant_den)
         print("Cost function value:", cost_function_value_no_opti)
-        print("Evaluation result (variance terms):", evaluate_no_opti[0].variance_terms)
+        print("Evaluation result (variance terms):", evaluate_no_opti.variance_terms)
         print("Initial Num:", ctrl_num_array)
         print("Initial Den:", ctrl_den_array)
         
@@ -283,28 +303,33 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
         print()
         print("Optimal controller num & den found:", res_opti_dual_annealing.x)
         
-        ctrl_num_optimized = res_opti_dual_annealing.x[:n_ctrl_num]
-        ctrl_num_optimized = ctrl_num_optimized.reshape(n_actuators, ctrl_order[0] + 1)
-        ctrl_den_optimized = res_opti_dual_annealing.x[n_ctrl_num:]
-        ctrl_den_optimized = ctrl_den_optimized.reshape(n_actuators, ctrl_order[1] + 1)
+        ctrl_num_optimized = res_opti_dual_annealing.x[:n_num_poly]
+        ctrl_den_optimized = res_opti_dual_annealing.x[n_num_poly:]
                                 
         res_cost_optimized  = cost(obj_to_optimize, 
-            actuators_number=n_actuators,
-            WFS_num=n1,
-            WFS_den=d1,
-            ASM_num=n2,
-            ASM_den=d2,
-            RTC_num=n3,
-            RTC_den=d3, 
-            gain = None,
-            controller_num = ctrl_num_optimized, 
-            controller_den = ctrl_den_optimized)   
-        
+                                    gain = None,
+                                    controller_num = ctrl_num_optimized, 
+                                    controller_den = ctrl_den_optimized)
+        H_r_optimized, H_n_optimized = build_transfer_function(
+                                            omega,
+                                            t_0,
+                                            n_actuators,
+                                            plant_num,
+                                            plant_den,
+                                            controller_num=ctrl_num_optimized,
+                                            controller_den=ctrl_den_optimized)
+        title_text = set_psd_plot_title_text(controller_type, 
+                                         mode_index=mode_index,
+                                         ctrl_num=ctrl_num_optimized,
+                                         ctrl_den=ctrl_den_optimized
+                                         )
+            
     cost_function_value_optimized = res_cost_optimized['cost_function_value']
     evaluate_optimized = res_cost_optimized['total_variance']
     stability_penalty, sm_penalty, H_n_tf_peak_penalty, H_r_tf_peak_penalty, gm_penalty = res_cost_optimized['penalty']
     H_n_tf_optimized = res_cost_optimized['H_n_tf']
     H_r_tf_optimized = res_cost_optimized['H_r_tf']
+    H_ol_tf_optimized = res_cost_optimized['H_ol_tf']
     H_ol_margins_optimized = res_cost_optimized['H_ol_margins']
     H_n_bandwidth_optimized_Hz = res_cost_optimized['bandwidth_H_n'] * 180 / np.pi
     
@@ -312,32 +337,30 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
     print("============ After Optimization ===========") 
     print()  
     print("Cost function value:", cost_function_value_optimized )
-    print("Evaluation result (variance terms):", 
-          evaluate_optimized[0].variance_terms, 
-          evaluate_optimized[1].variance_terms)
+    print("Evaluation result (variance terms):\n",evaluate_optimized.variance_terms)
     
     print("Optimized stability penalty:", stability_penalty)
     print("Optimized stability margin penalty:", sm_penalty)
     print("Optimized gain margin penalty:", gm_penalty)
-    print('H_n_peak_penalty of H_n:', H_n_tf_peak_penalty)
-    print('H_r_peak_penalty of H_n:', H_r_tf_peak_penalty)
+    print('H_n peak penalty:', H_n_tf_peak_penalty)
+    print('H_r peak penalty:', H_r_tf_peak_penalty)
     
     print("Optimized controller num and den:", 
-          evaluate_optimized[0].controller_num, 
-          evaluate_optimized[0].controller_den)
-    print('H_r_tf:',H_r_tf_optimized[0])
-    print('H_n_tf:',H_n_tf_optimized[0])
+          evaluate_optimized.controller_num, 
+          evaluate_optimized.controller_den)
+    print()
+    print('H_r_tf:',H_r_tf_optimized)
+    print('H_n_tf:',H_n_tf_optimized)
     
     # 7. Plotting
-    # bode figure for the transfer functions
     
-    gm = H_ol_margins_optimized[0][mode_index]
-    pm = H_ol_margins_optimized[1][mode_index]
+    # 7.1 bode figure for the transfer functions
     
-    # TODO
-    bw = H_n_bandwidth_optimized_Hz[mode_index]
+    gm = H_ol_margins_optimized[0]
+    pm = H_ol_margins_optimized[1]
+    
     fig1, ax3 = bodeplot_Hz(
-    transfer_functions_ct=H_n_tf_optimized[mode_index],
+    transfer_functions_ct=H_n_tf_optimized,
     omega_limits=[1e-5,frame_rate/2],
     omega_num=1000,
     labels="H_n ",
@@ -345,7 +368,7 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
     subtitle=f"[GM: {gm:.2f} dB, PM: {pm:.2f} deg]")
     
     bodeplot_Hz(
-    transfer_functions_ct=H_r_tf_optimized[mode_index],
+    transfer_functions_ct=H_r_tf_optimized,
     omega_limits=[1e-5,frame_rate/2],
     omega_num=1000,
     labels="H_r ",
@@ -354,17 +377,8 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
     ax1=ax3[0],
     ax2=ax3[1])
     
-    # compare psd
-    gain_array_optimized = res_opti_dual_annealing.x
-    H_r_optimized, H_n_optimized = build_transfer_function(
-        omega,
-        t_0,
-        n_actuators,
-        plant_num,
-        plant_den,
-        gain=gain_array_optimized,
-    )
-    
+    # 7.2 Compare PSDs and plot
+       
     _, variance_vibr_CL, PSD_out_temp, PSD_in_temp = temporal_variance(
         PSD_atmosf, PSD_vibration_zeros, H_r_optimized, n_actuators, omega
     )
@@ -410,44 +424,24 @@ def initial(param_dir = 'params_mod4_standard.yaml'):
     PSD_out_alias = np.real(PSD_out_alias)
     PSD_out_meas = np.real(PSD_out_meas)
     
-    plt.figure(figsize=(12, 7))
-    freqs = temporal_freqs
+    plot_psds(mode_index,
+              temporal_freqs,
+              PSD_in_temp,
+              PSD_in_alias,
+              PSD_in_meas,
+              PSD_out_temp,
+              PSD_out_alias,
+              PSD_out_meas,
+              plot_inputs=True,
+              title_text=title_text)
+    
+    freqs_nyquist = np.logspace(0, np.log10(frame_rate / 2.0), 2000)    
+    nyquist_count = plot_nyquist(H_ol_tf_optimized,
+                                 freqs_Hz=freqs_nyquist)    
 
-    plot_inputs = True
-    if plot_inputs:
-        plt.loglog(freqs, PSD_in_temp[mode_index, :], label='Turbulence (Open Loop)',
-                   color='tab:blue', linestyle='--', alpha=0.6)
-        plt.loglog(freqs, PSD_in_alias[mode_index, :], label='Aliasing (Open Loop)',
-                   color='tab:orange', linestyle='--', alpha=0.6)
-        plt.loglog(freqs, PSD_in_meas[mode_index, :], label='Noise (Open Loop)',
-                   color='tab:green', linestyle='--', alpha=0.6)
-
-    plt.loglog(freqs, PSD_out_temp[mode_index, :], label='Turbulence Residual (Servo-lag)',
-               color='tab:blue', linewidth=2.5)
-    plt.loglog(freqs, PSD_out_alias[mode_index, :], label='Aliasing Residual',
-               color='tab:orange', linewidth=2.5)
-    plt.loglog(freqs, PSD_out_meas[mode_index, :], label='Noise Residual',
-               color='tab:green', linewidth=2.5)
-
-    psd_total = (PSD_out_temp[mode_index, :] +
-                 PSD_out_alias[mode_index, :] +
-                 PSD_out_meas[mode_index, :])
-
-    plt.loglog(freqs, psd_total, label='Total PSD (Sum)',
-               color='black', linewidth=3, linestyle='-.')
-
-    plt.title(f"Spectral Analysis (PSD) in Closed Loop - Zernike Mode {mode_index}"
-              f"\nLoop Gain = {gain_array_optimized[mode_index]:.2f}", fontsize=14)
-    plt.xlabel("Temporal Frequency [Hz]", fontsize=12)
-    plt.ylabel("Power Spectral Density [nm² / Hz]", fontsize=12)
-    plt.grid(True, which="both", linestyle=":", alpha=0.7)
-    plt.legend(loc='lower left', fontsize=11)
-
-    plt.tight_layout()
- 
     plt.show()
     
     return obj_to_optimize
 
 if __name__ == "__main__":
-    obj_to_optimize = initial(param_dir = 'params_mod4_standard.yaml')
+    obj_to_optimize = initial(param_dir = 'params_mod4_polynomial.yaml')
