@@ -398,8 +398,8 @@ def build_transfer_function_single_mode(omega_temp_freq_interval, t_0,
         plant_den,
     )
     
-    H_r = H_r[0]
-    H_n = H_n[0]
+    # H_r = H_r[0]
+    # H_n = H_n[0]
     
     return H_r, H_n
     

@@ -290,25 +290,11 @@ def plot_nyquist(G_ol_tf,
     else:
         freqs = freqs_Hz * 2 * np.pi
     
-    # mag, phase, freqs_out = ct.freqresp(G_ol_tf, freqs)
+    plt.figure(figsize=(4, 4))
     
-    # real_part = mag.flatten() * np.cos(phase.flatten())
-    # imag_part = mag.flatten() * np.sin(phase.flatten())
-    plt.figure(figsize=(5, 5))
     tf_nyquist_response = ct.nyquist_response(G_ol_tf)
     cplt = ct.nyquist_plot(tf_nyquist_response, freqs, title='', linewidth=2, max_curve_magnitude=25)
-    plt.title('Nyquist plot', fontsize=14)
-    
-    # plt.figure(figsize=(5, 5))
-    # real = np.real(tf_nyquist_response.response)
-    # imag = np.imag(tf_nyquist_response.response)
-    # plt.plot(real, imag, '-', linewidth=2, label='Nyquist Contour')
-    # plt.plot(real, -imag, ':', linewidth=2, alpha=0.7, color='#1f77b4', label='Negative Frequencies')
-    # plt.plot(-1, 0, 'rx', markersize=5, label='Critical Point (-1, 0)')
-    # plt.grid(True, alpha=0.3)
-    # plt.xlabel('Real Axis')
-    # plt.ylabel('Imaginary Axis')
-    # plt.title('Nyquist plot', fontweight='bold', fontsize=14)
+    plt.title('Nyquist plot', fontsize=10)
     
     return(tf_nyquist_response.count)
  
