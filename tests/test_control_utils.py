@@ -419,7 +419,7 @@ class TestCostNormalCases:
         
         assert isinstance(result, dict)
         assert "cost_function_value" in result
-        assert "total_variance" in result
+        assert "evaluate_result" in result
         assert "penalty" in result
         assert "weight_penalty" in result
     

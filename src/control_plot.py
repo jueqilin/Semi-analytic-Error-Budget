@@ -233,40 +233,39 @@ def set_psd_plot_title_text(controller_type, mode_index, **title_text_params):
         
     return title_text
 
-def plot_psds(mode_index,
+def plot_psds_single_mode(mode_index,
               freqs,
               PSD_in_temp,
               PSD_in_alias,
               PSD_in_meas,
+              PSD_in_total,
               PSD_out_temp,
               PSD_out_alias,
               PSD_out_meas,
+              PSD_out_total,
               plot_inputs=True,
               title_text=None):
     
     plt.figure(figsize=(12, 7))
 
-    plot_inputs = True
     if plot_inputs:
-        plt.loglog(freqs, PSD_in_temp[mode_index, :], label='Turbulence (Open Loop)',
+        plt.loglog(freqs, PSD_in_temp, label='Turbulence (Open Loop)',
                    color='tab:blue', linestyle='--', alpha=0.6)
-        plt.loglog(freqs, PSD_in_alias[mode_index, :], label='Aliasing (Open Loop)',
+        plt.loglog(freqs, PSD_in_alias, label='Aliasing (Open Loop)',
                    color='tab:orange', linestyle='--', alpha=0.6)
-        plt.loglog(freqs, PSD_in_meas[mode_index, :], label='Noise (Open Loop)',
+        plt.loglog(freqs, PSD_in_meas, label='Noise (Open Loop)',
                    color='tab:green', linestyle='--', alpha=0.6)
-
-    plt.loglog(freqs, PSD_out_temp[mode_index, :], label='Turbulence Residual (Servo-lag)',
+        plt.loglog(freqs, PSD_in_total, label='Total (Open Loop)',
+                   color='black', linestyle='--', alpha=0.6)
+        
+    plt.loglog(freqs, PSD_out_temp, label='Turbulence Residual (Servo-lag)',
                color='tab:blue', linewidth=2.5)
-    plt.loglog(freqs, PSD_out_alias[mode_index, :], label='Aliasing Residual',
+    plt.loglog(freqs, PSD_out_alias, label='Aliasing Residual',
                color='tab:orange', linewidth=2.5)
-    plt.loglog(freqs, PSD_out_meas[mode_index, :], label='Noise Residual',
+    plt.loglog(freqs, PSD_out_meas, label='Noise Residual',
                color='tab:green', linewidth=2.5)
 
-    psd_total = (PSD_out_temp[mode_index, :] +
-                 PSD_out_alias[mode_index, :] +
-                 PSD_out_meas[mode_index, :])
-
-    plt.loglog(freqs, psd_total, label='Total PSD (Sum)',
+    plt.loglog(freqs, PSD_out_total, label='Total PSD (Sum)',
                color='black', linewidth=3, linestyle='-.')
 
     # title text was defined above if-else based on the controller type and parameters

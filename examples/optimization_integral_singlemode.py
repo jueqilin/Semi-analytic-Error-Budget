@@ -13,9 +13,22 @@ Created on 2026-05-05 14:45
 == Start Script for Semi-analytic Error Budget Optimization ==
 
 NOTE: 1. ONLY FOR SINGLE MODE
-      2. Optimization of intergral controller (the gain value)
+      2. Optimization of integral controller (the gain value)
          
+=========== content ===========
+
+    1. Load parameters
+    2. Generate Atmospheric Input
+    3. Build Transfer Functions for mode 0 (as an example)
+    4. Compute Optical Gain (needed for aliasing)
+    5. Initialize the optimization context for single mode control optimization
+    6. Optimization
+    7. Plotting
+        7.1 bode figure for the transfer functions
+        7.2 Compare PSDs and plot
+        7.3 Nyquist plot for the open-loop transfer function
         
+===============================        
          
 Created on 2026-05-03 14:59
 
@@ -30,7 +43,7 @@ import matplotlib.pyplot as plt
 from src.control_plot import (
     bodeplot_Hz,
     set_psd_plot_title_text,
-    plot_psds,
+    plot_psds_single_mode,
     plot_nyquist)
 
 DEFAULT_SRC_PATH = os.path.dirname(__file__)
@@ -41,9 +54,6 @@ from src.Functions import (
     load_parameters,
     turbulence_psd,
     fitting_variance,
-    temporal_variance,
-    aliasing_variance,
-    measure_variance,
     build_transfer_function_single_mode,
     compute_optical_gain,
     funct_d2,
@@ -54,7 +64,7 @@ from src.Functions import (
 
 from src.control_utils import cost
 
-def optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
+def optmization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
     # 1. Load parameters
     # param = load_parameters(os.path.join(DEFAULT_SRC_PATH, param_dir))
     param = load_parameters(param_dir)
@@ -109,17 +119,15 @@ def optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
     controller_type = param['optimization'].get('ctrl_type')
 
     if controller_type is not None:
-        ctrl_order = param['optimization'].get('order')
-        if ctrl_order is not None:
-            gain_array = None
-            n_num_poly = ctrl_order[0] + 1.0          
-            n_den_poly = ctrl_order[1] + 1.0
-            ctrl_num_array = np.zeros(n_num_poly, dtype=float)
-            ctrl_num_array[0] = 1.0
-            ctrl_den_array = np.zeros(n_den_poly, dtype=float)
-            ctrl_den_array[0] = 1.0  
+        gain_value = param['control'].get('gain_value')
+        if gain_value is not None:
+            gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
+            ctrl_num_array = None
+            ctrl_den_array = None
         else:
-            raise ValueError("Provide controller's order (polynomial controller)")
+            gain_array = np.full(n_actuators, float(param['control']['gain_min']))
+            ctrl_num_array = None
+            ctrl_den_array = None   
     else:
         raise ValueError("Provide 'ctrl_type' ")    
 
@@ -201,12 +209,13 @@ def optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
     n_iter_optimization = 100
     seed_optimization = 50
     
+    
     # generate the system with the initial controller (without optimization)
     res_cost_initial =  cost(obj_to_optimize, 
                             gain=gain_array[mode_index])    
     
     cost_function_value_no_opti = res_cost_initial['cost_function_value']
-    evaluate_no_opti = res_cost_initial['total_variance']
+    evaluate_no_opti = res_cost_initial['evaluate_result']
         
     opti_cost_func = lambda x: cost(obj_to_optimize,
                                 gain = x)['cost_function_value']
@@ -232,34 +241,33 @@ def optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
     print("Cost function value:", cost_function_value_no_opti)
     print("Evaluation result (variance terms):", evaluate_no_opti.variance_terms)
     print("Initial Gain array:", gain_array)
-    
+
     print() 
     print("=========Optimization============")
     print()
     print("Optimal gain array found:", res_opti_dual_annealing.x)
-    
+
     # res_cost_optimized, res_evaluate_optimized, stability_penalty, stability_margin_penalty, H_r_tf, H_n_tf, H_n_peak_penalty
     res_cost_optimized  = cost(obj_to_optimize, 
                                 gain=res_opti_dual_annealing.x[0],
                                 controller_num=None, 
                                 controller_den=None)
-        
+    
     gain_optimized = res_opti_dual_annealing.x[0]
     print(type(gain_optimized))
-
     H_r_optimized, H_n_optimized = build_transfer_function_single_mode(
-                                            omega,
-                                            t_0,
-                                            plant_num,
-                                            plant_den,
-                                            gain=gain_optimized)
-        
+                                        omega,
+                                        t_0,
+                                        plant_num,
+                                        plant_den,
+                                        gain=gain_optimized)
+    
     title_text = set_psd_plot_title_text(controller_type, 
-                                         mode_index=mode_index,
-                                         gain=gain_optimized) 
-            
+                                        mode_index=mode_index,
+                                        gain=gain_optimized) 
+               
     cost_function_value_optimized = res_cost_optimized['cost_function_value']
-    evaluate_optimized = res_cost_optimized['total_variance']
+    evaluate_optimized = res_cost_optimized['evaluate_result']
     stability_penalty, sm_penalty, H_n_tf_peak_penalty, H_r_tf_peak_penalty, gm_penalty = res_cost_optimized['penalty']
     H_n_tf_optimized = res_cost_optimized['H_n_tf']
     H_r_tf_optimized = res_cost_optimized['H_r_tf']
@@ -312,62 +320,27 @@ def optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
     ax2=ax3[1])
     
     # 7.2 Compare PSDs and plot
-
-    n_actuators_single_mode = 1   # just for single mode
     
-    _, variance_vibr_CL, PSD_out_temp, PSD_in_temp = temporal_variance(
-        PSD_atmosf, PSD_vibration_zeros, H_r_optimized, n_actuators_single_mode, omega
-    )
+    PSD_in_atmos = evaluate_optimized.psd_input["atmosphere"][0, :]
+    PSD_in_alias = evaluate_optimized.psd_input["aliasing"][0, :]
+    PSD_in_meas  = evaluate_optimized.psd_input["measurement"][0, :]
+    PSD_in_total = evaluate_optimized.psd_input["total"][0, :]
     
-    _, variance_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(
-        transf_funct=H_n_optimized,
-        actuators_number=n_actuators_single_mode,
-        omega_temp_freq_interval=omega,
-        c_optg=c_optg,
-        alpha=alpha_,
-        telescope_diameter=D,
-        seeing=seeing,
-        modulation_radius=modulation_radius,
-        windspeed=wind_speed,
-        maximum_radial_order_corrected=maximum_radial_order,
-        file_path_matrix_R=file_path_R1,
-        file_path_sigma_slopes=sigma_slopes_path
-    )
-
-    _, variance_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
-        F_excess=F_excess_noise,
-        pixel_pos=x_pixel,
-        sky_bkg=sky_background,
-        dark_curr=dark_current,
-        read_out_noise=readout_noise,
-        photon_flux=phot_flux,
-        telescope_diameter=D,
-        frame_rate=frame_rate,
-        magnitudo=magnitude,
-        n_subaperture=n_subapert,
-        collecting_area=collecting_area,
-        file_path_matrix_R=file_path_R1,
-        omega_temp_freq_interval=omega,
-        transf_funct=H_n_optimized,
-        actuators_number=n_actuators_single_mode,
-        c_optg=c_optg
-    )
+    PSD_out_atmos = evaluate_optimized.psd_output["atmosphere"][0, :]
+    PSD_out_alias = evaluate_optimized.psd_output["aliasing"][0, :]
+    PSD_out_meas  = evaluate_optimized.psd_output["measurement"][0, :]
+    PSD_out_total = evaluate_optimized.psd_output["total"][0, :]
     
-    PSD_in_temp = np.real(PSD_in_temp)
-    PSD_in_alias = np.real(PSD_in_alias)
-    PSD_in_meas = np.real(PSD_in_meas)
-    PSD_out_temp = np.real(PSD_out_temp)
-    PSD_out_alias = np.real(PSD_out_alias)
-    PSD_out_meas = np.real(PSD_out_meas)
-    
-    plot_psds(mode_index,
+    plot_psds_single_mode(mode_index,
               temporal_freqs,
-              PSD_in_temp,
+              PSD_in_atmos,
               PSD_in_alias,
               PSD_in_meas,
-              PSD_out_temp,
+              PSD_in_total,
+              PSD_out_atmos,
               PSD_out_alias,
               PSD_out_meas,
+              PSD_out_total,
               plot_inputs=True,
               title_text=title_text)
     
@@ -382,4 +355,4 @@ def optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml'):
     return obj_to_optimize
 
 if __name__ == "__main__":
-    obj_to_optimize = optimization_integral_singlemode(param_dir = 'params_mod4_integral.yaml')
+    obj_to_optimize = optmization_integral_singlemode(param_dir = 'params_mod4_integral.yaml')

@@ -153,12 +153,12 @@ def cost(obj_to_optimize,
     ctrl_num_evaluate = ctrl_tf.num[0][0]
     ctrl_den_evaluate = ctrl_tf.den[0][0]
     
-    cost_variance_result = obj_to_optimize.evaluate(
+    evaluate_result = obj_to_optimize.evaluate(
         controller_num=ctrl_num_evaluate, 
         controller_den=ctrl_den_evaluate, 
         store_history=True)   
     
-    cost_variance_without_fitting = cost_variance_result.cost - cost_variance_result.variance_terms["fitting"]
+    cost_variance_without_fitting = evaluate_result.cost - evaluate_result.variance_terms["fitting"]
     
     H_n_tf_peak_penalty = compute_close_loop_peak_penalty(H_n_tf, H_n_peak_limitation) 
     H_r_tf_peak_penalty = compute_close_loop_peak_penalty(H_r_tf, H_r_peak_limitation)    
@@ -209,8 +209,8 @@ def cost(obj_to_optimize,
     return {
         "cost_function_value":
             cost_function,
-        "total_variance":
-            cost_variance_result,
+        "evaluate_result":
+            evaluate_result,
         "penalty":
             [stability_penalty, sm_penalty, H_n_tf_peak_penalty, H_r_tf_peak_penalty, gm_penalty],
         "weight_penalty":
