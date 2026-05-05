@@ -19,9 +19,10 @@ from scipy import integrate as scipy_integrate
 
 from src.Functions import (
     DEFAULT_ALIASING_ALPHA,
-    _load_andes_gain_grid,
+    _load_gain_grid,
     aliasing_psd_from_coeffs,
     build_integrator_controller_polynomials,
+    compute_optical_gain,
     compute_k_prime,
     compute_noise_PSD_intermediate,
     compute_slope_noise_variance,
@@ -578,6 +579,36 @@ class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
             0,
         )
 
+    @patch("src.Functions._load_optical_gain_grid")
+    def test_compute_optical_gain_accepts_generic_paired_grid(self, mock_load_grid):
+        mock_load_grid.return_value = (
+            np.array(
+                [
+                    [
+                        [1.0, 2.0],
+                        [3.0, 4.0],
+                    ],
+                    [
+                        [5.0, 6.0],
+                        [7.0, 8.0],
+                    ],
+                ]
+            ),
+            np.array([0.5, 1.0]),
+            np.array([0.0, 4.0]),
+        )
+
+        result = compute_optical_gain(
+            "system_mod0.fits",
+            "system_mod4.fits",
+            seeing=0.75,
+            modulation_radius=2.0,
+            actuators_number=2,
+        )
+
+        expected = np.array([[4.0], [5.0]])
+        np.testing.assert_allclose(result, expected)
+
 
 # ---------------------------------------------------------------------------
 # Tests that require files already present in the repository
@@ -587,7 +618,7 @@ class TestLoadParameters(unittest.TestCase):
     """load_parameters reads the YAML configuration file."""
 
     def setUp(self):
-        self.yaml_path = os.path.join(REPO_ROOT, "params_mod4.yaml")
+        self.yaml_path = os.path.join(REPO_ROOT, "params_ANDES.yaml")
 
     def test_returns_dict(self):
         self.assertIsInstance(load_parameters(self.yaml_path), dict)
@@ -619,12 +650,12 @@ class _ChdirMixin:
 
 
 class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
-    """_load_andes_gain_grid assembles a 2×N array from ANDES FITS files."""
+    """_load_gain_grid assembles a 2×N array from ANDES FITS files."""
 
     def test_output_is_3d_ndarray(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_gain_grid(file_mod0, file_mod4)
         self.assertIsInstance(grid, np.ndarray)
         self.assertEqual(grid.ndim, 3)
 
@@ -632,13 +663,13 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
         # One row for mod0, one for mod4
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_gain_grid(file_mod0, file_mod4)
         self.assertEqual(grid.shape[0], 2)
 
     def test_all_values_are_positive(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_gain_grid(file_mod0, file_mod4)
         self.assertTrue(np.all(grid > 0))
 
 

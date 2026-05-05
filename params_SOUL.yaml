@@ -25,22 +25,30 @@ wavefront_sensor:
   number_of_sub: 100
   # Modulation radius [lambda/D]
   modulation_radius: 3
+  # Modal radius for optg grid
+  modal_radius_soul: [0.0, 3.0]
 
 guide_star:
   # Number of photons per second per collecting area
   flux_photons: 9.0e12
   # Guide star magnitude
-  magn: 7
+  magn: 7.5
 
 data:
   # Path to reconstruction matrix or noise propagation coefficients vector
-  reconstruction_matrix: "src/file_fits/ANDES/ANDES_pyr100x100_wl850_fv2.1_slInten_ma3_bn1_mn4000_noise_prop_coeff.fits"
+  reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn500_noise_prop_coeff.fits"
   # Path to wind-shake PSD (tip and tilt)
-  windshake_psd: "src/file_fits/ANDES/morfeo_windshake8ms_psd_2022_1k.fits"
-  # Path to modulation models (mod0 and mod4)
-  optical_gain_models: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"]
+  windshake_psd: "src/file_fits/LBT/LBTelabVibrationsNew.fits"
   # Path to sigma slopes from aliasing
-  sigma_slopes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
+  sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+  # Path to SOUL optical gain cube
+  #    Note that the cube should be provided if no optical gain models are given,
+  #    and vice versa. If both are provided, an error is raised.
+  # optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
+  # Path to SOUL modulation models (binning 1, mod0 and mod3)
+  optical_gain_models: ["src/file_fits/LBT/SOUL_og_mod0.fits", "src/file_fits/LBT/SOUL_og_mod3.fits"]
+  # Path to modal PSD_aliasing from specula 
+  modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
 
 plant:
   # Denominator polynomial coefficients of the W transfer function
@@ -62,7 +70,7 @@ frequency_ranges:
 
 control:
   # Number of corrected modes
-  n_modes: 2
+  n_modes: 300
   # Sampling time in [s] — also sets the Nyquist frequency
   sampling_time: 0.001
   # Weights on the 4 pyramid pixels used by the slope computer.
@@ -73,10 +81,8 @@ control:
   gain_n: 1
   # Total delay (WFS + RTC + DM) in [s]
   total_delay: 3
-
-system:
-  # ANDES or SOUL
-  name: "ANDES"
+  # Binning
+  bin: 1  
 
 display:
   # Enable/disable all visualization blocks

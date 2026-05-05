@@ -13,6 +13,7 @@ import yaml
 import os
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
+import re
 from scipy import integrate
 from astropy.io import fits                                                    
 import sympy as sp                                                             
@@ -88,7 +89,7 @@ def funct_d2(T_total):
     d2[0] = 1
     
     return d2
-
+    
 
 # Function that returns the numerator and denominator of the integrator controller C = g*Z/(Z-1)
 # expressed as polynomials in Z (descending powers, np.polyval convention).
@@ -155,10 +156,7 @@ def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z):
         
 # Function to compute the controller (num_int, den_int) polynomial arrays for all modes using an integrator.
 
-def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
-
-    # Kept for API compatibility with the generic transfer-function builder.
-    _ = omega_temp_freq_interval, t_0
+def compute_int_coeff(gain, actuators_number=1):
 
     num_int_example, den_int_example = build_integrator_controller_polynomials(gain[0])
 
@@ -167,6 +165,10 @@ def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
 
     for i in range(actuators_number):
         num_int_array[i, :], den_int_array[i, :] = build_integrator_controller_polynomials(gain[i])
+
+    if actuators_number == 1:
+        num_int_array = num_int_array[0]
+        den_int_array = den_int_array[0]
 
     return num_int_array, den_int_array
   
@@ -299,8 +301,25 @@ def build_transfer_function(omega_temp_freq_interval, t_0, actuators_number,
     controller_den : array_like, optional
         Explicit controller denominator (descending powers of Z).
     """
+    if gain is not None and gain.shape != (actuators_number,):
+        raise ValueError(f"gain must have shape ({actuators_number},), got {gain.shape}")
+    if controller_num is not None:
+        if controller_num.ndim != 2:
+            raise ValueError("controller_num must be a 2D array")
+        if controller_num.shape[0] != actuators_number:
+            raise ValueError(
+                f"controller_num must have shape (N_modes, N_coeff), got {controller_num.shape} for N_modes={actuators_number}"
+            )
+    if controller_den is not None:
+        if controller_den.ndim != 2:
+            raise ValueError("controller_den must be a 2D array")
+        if controller_den.shape[0] != actuators_number:
+            raise ValueError(
+                f"controller_den must have shape (N_modes, N_coeff), got {controller_den.shape} for N_modes={actuators_number}"
+            )
+    
     if gain is not None:
-        ctrl_num, ctrl_den = compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number)
+        ctrl_num, ctrl_den = compute_int_coeff(gain, actuators_number)
     elif controller_num is not None and controller_den is not None:
         ctrl_num = controller_num
         ctrl_den = controller_den
@@ -319,6 +338,70 @@ def build_transfer_function(omega_temp_freq_interval, t_0, actuators_number,
         plant_num,
         plant_den,
     )
+    
+
+# single mode version of the transfer function builder, for convenience when only one mode is considered (e.g. tip-tilt).
+
+def build_transfer_function_single_mode(omega_temp_freq_interval, t_0,
+                            plant_num, plant_den, gain=None,
+                            controller_num=None, controller_den=None):
+    """Build both closed-loop transfer functions H_r and H_n.
+       Single-mode version of the more general build_transfer_function,
+       for convenience when only one mode is considered (e.g. tip-tilt).
+    
+    Parameters
+    ----------
+    omega_temp_freq_interval : array_like
+        Angular temporal frequency vector [rad s⁻¹].
+    t_0 : float
+        Sampling period [s].
+    plant_num : array_like
+        Pre-multiplied plant numerator polynomial (e.g. ``n1 * n2 * n3``).
+    plant_den : array_like
+        Pre-multiplied plant denominator polynomial (e.g. ``d1 * d2 * d3``).
+    gain : array_like, optional
+        Scalar gain.  Mutually exclusive with
+        ``controller_num``/``controller_den``.
+    controller_num : array_like, optional
+        Explicit controller numerator (descending powers of Z).
+        1D array of shape (N_num_coeff,).
+    controller_den : array_like, optional
+        Explicit controller denominator (descending powers of Z).
+        1D array of shape (N_den_coeff,).
+    """
+    gain = np.atleast_1d(gain) if gain is not None else None
+    if gain is not None and gain.shape != (1,):
+        raise ValueError(f"gain must have shape (1,), got {gain.shape}")
+    if controller_num is not None and controller_num.ndim != 1:
+        raise ValueError("controller_num must be a 1D array")
+    if controller_den is not None and controller_den.ndim != 1:
+        raise ValueError("controller_den must be a 1D array")
+
+    if gain is not None:
+        ctrl_num, ctrl_den = compute_int_coeff(gain)
+    elif controller_num is not None and controller_den is not None:
+        ctrl_num = controller_num
+        ctrl_den = controller_den
+    else:
+        raise ValueError(
+            "Provide either 'gain' (integrator) or both "
+            "'controller_num' and 'controller_den'"
+        )
+    
+    H_r, H_n = build_transfer_function_from_controller_polynomials(
+        ctrl_num,
+        ctrl_den,
+        omega_temp_freq_interval,
+        t_0,
+        1,
+        plant_num,
+        plant_den,
+    )
+    
+    H_r = H_r[0]
+    H_n = H_n[0]
+    
+    return H_r, H_n
     
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
@@ -366,6 +449,15 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     return PSD_atmo
 
 
+# Function to convert a PSD from nm^2/Hz to nm^2/(rad/s)
+
+def PSD_conversion (PSD_to_convert):
+    
+    PSD = PSD_to_convert/(2 * np.pi)
+    
+    return PSD
+
+
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019).
 # The analytical formula yields rad^2; the function converts it to nm^2 to match the other terms.
@@ -407,7 +499,7 @@ def integrate_function(integrand_function, integr_interval):
     result = integrate.simpson(integrand_function, integr_interval)
     
     return result
-    
+
 
 # Function that allows us to load the windshake PSD and their corresponding frequencies
 
@@ -456,7 +548,7 @@ def resize_psd_like(PSD_atmo_turb, PSD_vibration):
     PSD_vib_1= np.zeros_like(PSD_atmo_turb)
     m = min(PSD_vibration.shape[0], PSD_vib_1.shape[0])
     PSD_vib_1[:m, :] = PSD_vibration[:m, :]
-    
+
     return PSD_vib_1  
 
 
@@ -563,7 +655,7 @@ def extract_propagation_coefficients(file_path_matrix_R):
 # It reads the modal optical gain values for two modulation radii and arranges them 
 # into a 2D grid indexed by modulation radius and seeing.
 
-def _load_andes_gain_grid(file_mod0, file_mod4):
+def _load_gain_grid(file_mod1, file_mod2):
     """
     Loads and stacks the ANDES optical gain data from two separate FITS files.
     It returns:
@@ -574,12 +666,12 @@ def _load_andes_gain_grid(file_mod0, file_mod4):
     
     modal_radius_vals = np.zeros(2)
 
-    with fits.open(file_mod0) as hdul:
+    with fits.open(file_mod1) as hdul:
         gain_mod0 = hdul[0].data
         seeing_vals = hdul[1].data
         modal_radius_vals[0] = 0  # Assuming the first file corresponds to modulation radius = 0
         
-    with fits.open(file_mod4) as hdul:
+    with fits.open(file_mod2) as hdul:
         gain_mod4 = hdul[0].data
         seeing_vals_check = hdul[1].data
         modal_radius_vals[1] = 4  # Assuming the second file corresponds to modulation radius = 4
@@ -623,21 +715,84 @@ def _format_modal_optical_gain(c_optg, actuators_number, gain_name="c_optg"):
     return gain_vector[:, np.newaxis]
 
 
-# Function to compute the modal optical gain for a given modulation radius and seeing.
-# Uses an optical gain grid from ANDES_og_mod0.fits and ANDES_og_mod4.fits and performs
-# a 2D interpolation to estimate the modal gain for the given modulation radius and seeing
+def _infer_modulation_radius_from_filename(file_path):
+    """Infer a modulation radius from file names like ``*_mod4.fits``."""
+    match = re.search(r'mod([0-9]+(?:\.[0-9]+)?)', os.path.basename(str(file_path)))
 
-def compute_andes_optical_gain(file_mod0, file_mod4,
-                               seeing, modulation_radius,
-                               actuators_number=None):
+    if match is None:
+        return None
+
+    return float(match.group(1))
+
+
+def _resolve_modulation_radius_axis(file_mod_low, file_mod_high, modulation_radii=None):
+    """Resolve the 2-point modulation-radius axis for paired FITS optical-gain grids."""
+    if modulation_radii is not None:
+        modal_radius_vals = np.asarray(modulation_radii, dtype=float).reshape(-1)
+
+        if modal_radius_vals.size != 2:
+            raise ValueError("modulation_radii must contain exactly two values")
+
+        return modal_radius_vals
+
+    inferred_radii = [
+        _infer_modulation_radius_from_filename(file_mod_low),
+        _infer_modulation_radius_from_filename(file_mod_high),
+    ]
+
+    if any(radius is None for radius in inferred_radii):
+        raise ValueError(
+            "Unable to infer modulation radii from file names; "
+            "provide modulation_radii explicitly"
+        )
+
+    return np.asarray(inferred_radii, dtype=float)
+
+
+def _load_optical_gain_grid(file_mod_low, file_mod_high, modulation_radii=None):
+    """Load a paired optical-gain grid with axes (modulation radius, seeing)."""
+    modal_radius_vals = _resolve_modulation_radius_axis(
+        file_mod_low,
+        file_mod_high,
+        modulation_radii=modulation_radii,
+    )
+
+    with fits.open(file_mod_low) as hdul:
+        gain_mod_low = hdul[0].data
+        seeing_vals = hdul[1].data
+
+    with fits.open(file_mod_high) as hdul:
+        gain_mod_high = hdul[0].data
+        seeing_vals_check = hdul[1].data
+
+    if not np.array_equal(seeing_vals, seeing_vals_check):
+        raise ValueError("Consistency error: the seeing axes in the two FITS files do not match.")
+
+    return np.stack([gain_mod_low, gain_mod_high], axis=0), seeing_vals, modal_radius_vals
+
+
+# Function to compute the modal optical gain for a given modulation radius and seeing.
+# Uses an optical gain grid from two fits files containing optical gain values for two different modal radii
+# and performs a 2D interpolation to estimate the modal gain for the given modulation radius and seeing.
+
+def compute_optical_gain(file_mod0, file_mod1,
+                         seeing, modulation_radius,
+                         actuators_number=None, modulation_radii=None):
     """
-    Computes the optical gain for the ANDES system using 2D interpolation.
+    Computes the optical gain for any system represented by two 2D FITS grids.
+
+    The FITS inputs must contain modal optical-gain values sampled on a common
+    seeing axis, with one file per modulation radius.
 
     If ``actuators_number`` is provided, returns a modal column vector with
     shape ``(N_modes, 1)``. Otherwise, returns a representative scalar optical
     gain averaged over the available modes.
     """
-    gain_grid, seeing_vals, modal_radius_vals = _load_andes_gain_grid(file_mod0, file_mod4)
+    gain_grid, seeing_vals, modal_radius_vals = _load_optical_gain_grid(
+        file_mod0,
+        file_mod1,
+        modulation_radii=modulation_radii,
+    )
 
 
     interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals),
@@ -648,62 +803,82 @@ def compute_andes_optical_gain(file_mod0, file_mod4,
     point = np.array([[modulation_radius, seeing]])
     interpolated_gain = np.asarray(interp_optical_gain(point), dtype=float)
 
+
     if actuators_number is None:
         return float(np.mean(interpolated_gain))
 
     return _format_modal_optical_gain(interpolated_gain, actuators_number)
 
-
-# Reshape the interpolated optical gain to match the PSD dimensions and avoid broadcasting issues
-
-def final_andes_optical_gain(file_mod0, file_mod4, seeing, modulation_radius,
-                             actuators_number):
-
-    return compute_andes_optical_gain(
-        file_mod0,
-        file_mod4,
-        seeing,
-        modulation_radius,
-        actuators_number=actuators_number,
-    )
-
+# =============================================================================
+# COMPARISON FOR OPTG SOUL (another way to calculate optg for the SOUL case)
+# =============================================================================
 
 # SOUL optical gain data is stored in a single FITS file as a 3D data cube,
 # with axes for modulated modes, binning, and magnitudes.
 
-def _load_soul_gain_cube(filepath):
+def _load_soul_gain_cube(file_soul_optical_gain_cube):
     """
     Loads the SOUL optical gain data cube and its axes from a single FITS file.
     """
-    with fits.open(filepath) as hdul:
+    with fits.open(file_soul_optical_gain_cube) as hdul:
         magnitudes = hdul[1].data     # Shape: (11,)               # pylint: disable=E1101 
         binning = hdul[2].data        # Shape: (4,)                # pylint: disable=E1101 
         mod_modes = hdul[3].data      # Shape: (6,)                # pylint: disable=E1101 
         gain_cube = hdul[4].data      # Shape: (6, 4, 11)          # pylint: disable=E1101 
-        
+    
     return mod_modes, binning, magnitudes, gain_cube
 
+ 
+# SOUL optical gain is computed by performing a 2D interpolation over binning and magnitudes.
 
-# SOUL optical gain is computed by performing a 3D interpolation over the modulated modes,
-# binning, and magnitudes.
-
-def compute_soul_optical_gain(filepath, target_mod_modes, target_binning, target_magnitude):
+def compute_soul_optical_gain(file_soul_optical_gain_cube, 
+                              target_binning, target_magnitude):
     """
     Computes the optical gain for the SOUL system using 3D interpolation.
     Axes order must match the data cube shape: (mod_modes, binning, magnitudes).
     """
-    mod_modes, binning, magnitudes, gain_cube = _load_soul_gain_cube(filepath)
+    mod_modes, binning, magnitudes, gain_cube = _load_soul_gain_cube(file_soul_optical_gain_cube)
     
-    # 3D Interpolation
-    interp_optical_gain = RegularGridInterpolator(
-        (mod_modes, binning, magnitudes), 
-        gain_cube, 
-        bounds_error=False, 
-        fill_value=None
-    )
+    n_modes = len(mod_modes)
+    interpolated_gain = np.zeros(n_modes)
+
+    for i in range(n_modes):
+
+        interp = RegularGridInterpolator((binning, magnitudes), 
+                                         gain_cube[i, :, :], 
+                                         bounds_error=False, 
+                                         fill_value=None)
+
+        point = np.array([target_binning, target_magnitude])
+        interpolated_gain[i] = interp(point)
     
-    interpolated_gain = float(interp_optical_gain((target_mod_modes, target_binning, target_magnitude)))
-    return interpolated_gain
+    #print("SOUL INTERPOLATED OPTICAL GAIN:",interpolated_gain)
+    #print("SOUL INTERPOLATED OPTICAL GAIN SHAPE:",interpolated_gain.shape)
+    
+    return interpolated_gain, mod_modes
+
+    
+# Function to interpolate the resulting optical gain values from the original modal values, 
+# over the target modal values (defined by the number of actuators) and reshape the resulting
+# interp_gain_final to match the PSD dimensions and avoid broadcasting issues.
+
+def final_soul_optical_gain(file_soul_optical_gain_cube, target_binning, 
+                             target_magnitude, actuators_number):
+    
+    interp_gain, m_modes = compute_soul_optical_gain(file_soul_optical_gain_cube, 
+                                                     target_binning, target_magnitude)
+    
+    target_modes = np.arange(actuators_number)
+    
+    interp_gain_final = interpolate_vector(target_modes, m_modes, interp_gain)
+    
+    # Reshape of interp_gain_final
+    interp_gain_final = interp_gain_final.reshape(len(interp_gain_final), 1)
+    
+    #print("SOUL INTERPOLATED FINAL OPTICAL GAIN version 1:",interp_gain_final)
+    #print("SOUL INTERPOLATED FINAL OPTICAL GAIN SHAPE version 1:",interp_gain_final.shape)
+    
+    return interp_gain_final
 
 
 # Function to read and return the sigma slopes data from the FITS file.
@@ -1019,6 +1194,7 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                      collecting_area, file_path_matrix_R, transf_funct,
                      actuators_number, omega_temp_freq_interval, c_optg,
                      pixels_per_subaperture=4):
+
     
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
@@ -1055,12 +1231,108 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
  
+    
+# Function to find the gain that optimize the total variance
+
+def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
+                    t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+                    excess_noise_factor, sky_background, dark_current, readout_noise,
+                    photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+                    slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+                    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+                    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg): # <-- AGGIUNTO c_optg
+    
+    number_of_actuators = 1                                                  
+     
+    gain_values = np.arange(gain_min, gain_max, 0.1)   
+                                                     
+    tot_variance = np.zeros_like(gain_values, dtype=float)
+    
+    # Eseguiamo l'interpolazione fuori dal loop per efficienza (non cambia ad ogni guadagno!)
+    if not np.array_equal(t_freqs, f):
+        psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
+    else:
+        psd_windshake_ready = psd_windshake
+
+    for i in range(len(gain_values)):
+        
+        g = gain_values[i]
+        gain_val = np.array([g])                                               
+
+###########################       
+        
+        H_r_temp, H_n_meas = build_transfer_function(
+            omega_temp_freq_interval,
+            t_0,
+            number_of_actuators,
+            plant_num,
+            plant_den,
+            gain=gain_val,
+        )
+        H_n_alias = H_n_meas
+        
+        
+        variance_fit = fitting_variance(fitting_coeff, number_of_actuators,
+                                        telescope_diameter, fried_parameter)
+        
+        _, variance_temporal, _, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
+                                                       H_r_temp, number_of_actuators,
+                                                       omega_temp_freq_interval)
+
+        # Chiamata esplicita con keyword arguments per evitare errori di posizionamento
+        _, variance_aliasing, _, _ = aliasing_variance(
+            transf_funct=H_n_alias,
+            actuators_number=number_of_actuators,
+            omega_temp_freq_interval=omega_temp_freq_interval,
+            c_optg=c_optg,
+            telescope_diameter=telescope_diameter,
+            seeing=seeing,
+            modulation_radius=modulation_radius,
+            windspeed=wind_speed,
+            maximum_radial_order_corrected=maximum_radial_order_corrected,
+            file_path_matrix_R=reconstruction_matrix_path,
+            alpha=alpha,
+            file_path_sigma_slopes=sigma_slopes_path
+        )
+
+        # Chiamata esplicita con keyword arguments
+        _, variance_measurement, _, _ = measure_variance(
+            F_excess=excess_noise_factor,
+            pixel_pos=slope_computer_weights,
+            sky_bkg=sky_background,
+            dark_curr=dark_current,
+            read_out_noise=readout_noise,
+            photon_flux=photon_flux,
+            telescope_diameter=telescope_diameter,
+            frame_rate=frame_rate,
+            magnitudo=magnitude,
+            n_subaperture=n_subaperture,
+            collecting_area=collecting_area,
+            file_path_matrix_R=reconstruction_matrix_path,
+            transf_funct=H_n_meas,
+            actuators_number=number_of_actuators,
+            omega_temp_freq_interval=omega_temp_freq_interval,
+            c_optg=c_optg
+        )
+
+        print ("CLOSED LOOP:")
+        tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
+                                         np.real(variance_aliasing), np.real(variance_measurement))
+    
+    idx_min = np.argmin(tot_variance)
+    gain_min_variance = gain_values[idx_min]
+    
+    # print ("BEST GAIN:", gain_min_variance)
+
+    return gain_min_variance
+
 
 # Function to interpolate a 1D vector to a new set of points, setting values outside the original range to 0.
 
 def interpolate_vector(x_interpolation, x_original, vector_original):
     
-    vector_interpolated = np.interp (x_interpolation, x_original, vector_original, left = 0, right = 0) 
+    vector_interpolated = np.interp (x_interpolation, x_original, vector_original, 
+                                     left = 0, right = 0) 
     
     return vector_interpolated
 
@@ -1079,11 +1351,11 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
     Omega_freqs_original = 2 * np.pi * freqs_original
     
     n_modes_available = min(actuators_number, PSD_original.shape[0])
-
+    
     for i in range(n_modes_available):
 
-        PSD_interpolated[i, :] = interpolate_vector(freqs_interpolation, freqs_original, PSD_original[i, :])
-
+        PSD_interpolated[i, :] = interpolate_vector(Omega_freqs_interpolation, Omega_freqs_original, PSD_original[i, :])
+        
         sigma2[i] = integrate.simpson(PSD_original[i, :], Omega_freqs_original)
         sigma2_interp[i] = integrate.simpson(PSD_interpolated[i, :], Omega_freqs_interpolation)
 
@@ -1491,18 +1763,6 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
 
 
          
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
